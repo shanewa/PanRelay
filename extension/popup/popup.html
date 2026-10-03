@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PanRelay</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>PanRelay</h1>
+      <p class="sub">度盘接力存 · 分享页分批转存</p>
+    </header>
+    <label class="row">
+      <input type="checkbox" id="enabled" />
+      <span>启用接力转存</span>
+    </label>
+    <label class="row">
+      <span>每批文件数</span>
+      <input type="number" id="batchSize" min="50" max="500" step="50" />
+    </label>
+    <label class="row">
+      <input type="checkbox" id="alwaysRelay" />
+      <span>始终走接力（含小批量）</span>
+    </label>
+    <p class="hint">
+      在百度网盘分享页选好文件、设置底部「保存到」后，点击「保存到网盘」。超过单批上限或含文件夹时，扩展会自动分批转存。
+    </p>
+    <script src="popup.js"></script>
+  </body>
+</html>

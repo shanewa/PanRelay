@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterFileEdit": [
+      {
+        "command": "node \".cursor/hooks/auto-commit.mjs\"",
+        "timeout": 15
+      }
+    ],
+    "stop": [
+      {
+        "command": "node \"scripts/auto-commit.mjs\" --force",
+        "timeout": 60
+      }
+    ]
+  }
+}

@@ -1,0 +1,49 @@
+#panrelay-panel {
+  position: fixed;
+  right: 16px;
+  bottom: 88px;
+  z-index: 2147483646;
+  width: 320px;
+  max-height: 40vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+  font-size: 13px;
+  color: #e8eef7;
+  pointer-events: none;
+}
+
+#panrelay-panel .panrelay-panel-inner {
+  pointer-events: auto;
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  padding: 12px 14px;
+}
+
+#panrelay-panel .panrelay-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 6px;
+  color: #7dd3fc;
+}
+
+#panrelay-panel .panrelay-status {
+  margin-bottom: 8px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+#panrelay-panel .panrelay-log {
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #94a3b8;
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+  padding-top: 8px;
+}
+
+#panrelay-panel .panrelay-log-line {
+  margin-bottom: 4px;
+}

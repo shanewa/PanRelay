@@ -1,0 +1,33 @@
+---
+description: 有代码改动时必须在收尾前 git commit（PanRelay 强制工作流）
+alwaysApply: true
+---
+
+# Git 收尾工作流（强制）
+
+本会话中若对仓库产生了**代码或配置类改动**，在结束本轮回复之前**必须**完成本地 `git commit`。不要把未提交改动留给用户。
+
+## 何时必须提交
+
+- 修改或新增了源码、测试、脚本、项目配置（含 `AGENTS.md`、`.cursor/rules/`、git hooks 等）
+- 多轮对话中累积的未提交改动，在任务完成时一并提交
+
+## 何时不要提交
+
+- 用户明确说「先不要 commit」「不要提交」
+- 仅回答问题、只读排查、无文件改动
+- 敏感文件（`.env`、密钥）与用户未要求的本地 runtime 产物
+
+## 执行步骤
+
+1. `git status` 与 `git diff`，确认将纳入提交的文件
+2. 只 `git add` 与本次任务相关的路径
+3. 按 `AGENTS.md` 格式写 commit message
+4. `git commit`（不跳过 hooks，不 `--amend` 除非 `AGENTS.md` 允许）
+5. 在本轮回复末尾展示 `git log -1 --oneline`
+
+## 其他
+
+- 未明确要求时不要 `git push`
+- 不执行破坏性 git 命令
+- 不要更新 git config；Author 与 hooks 由 `scripts/install-git-hooks.mjs` 管理

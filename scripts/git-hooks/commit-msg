@@ -1,0 +1,17 @@
+#!/usr/bin/env node
+import { readFileSync, writeFileSync } from "node:fs";
+
+const msgFile = process.argv[2];
+if (!msgFile) {
+  process.exit(1);
+}
+
+const msg = readFileSync(msgFile, "utf8");
+const lines = msg.split(/\r?\n/).filter((line) => !/^Co-authored-by:/i.test(line));
+const out = lines.join("\n").replace(/\n+$/, "\n");
+writeFileSync(msgFile, out);
+
+if (/^Co-authored-by:/im.test(out)) {
+  console.error("commit-msg hook: Co-authored-by is not allowed (see AGENTS.md)");
+  process.exit(1);
+}

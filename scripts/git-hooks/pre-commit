@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+import { execSync } from "node:child_process";
+
+function stagedFiles() {
+  const raw = execSync("git diff --cached --name-only --diff-filter=ACM -z", {
+    encoding: "utf8",
+  });
+  return raw.split("\0").filter(Boolean);
+}
+
+function isBinary(path) {
+  try {
+    const out = execSync(`git check-attr binary -- "${path}"`, { encoding: "utf8" });
+    return /:\s*binary\b/.test(out);
+  } catch {
+    return false;
+  }
+}
+
+const bad = [];
+for (const file of stagedFiles()) {
+  if (isBinary(file)) continue;
+  let content;
+  try {
+    content = execSync(`git show ":${file}"`, { encoding: "buffer" });
+  } catch {
+    continue;
+  }
+  if (content.includes(0x0d)) {
+    bad.push(file);
+  }
+}
+
+if (bad.length) {
+  console.error("pre-commit: CRLF is not allowed (repository uses LF only).");
+  for (const file of bad) {
+    console.error(`  ${file}`);
+  }
+  console.error("Fix with: git add --renormalize <paths>  (see .gitattributes)");
+  process.exit(1);
+}
