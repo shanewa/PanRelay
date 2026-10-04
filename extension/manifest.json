@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "PanRelay · 度盘接力存",
-  "version": "0.1.0",
-  "description": "百度网盘分享页分批次接力转存（每批最多 500 个文件），后续支持视频倍速。",
+  "version": "0.2.0",
+  "description": "百度网盘分享页分批接力转存 + 在线视频倍速（参考 Global Speed 思路）。",
   "permissions": ["storage"],
   "host_permissions": [
     "https://pan.baidu.com/*",
@@ -34,6 +34,13 @@
       "js": ["lib/transfer-core.js", "content/share-relay.js"],
       "css": ["styles/relay-panel.css"],
       "run_at": "document_start"
+    },
+    {
+      "matches": ["https://pan.baidu.com/*", "https://yun.baidu.com/*"],
+      "js": ["lib/media-speed.js", "content/video-speed.js"],
+      "css": ["styles/video-speed-hud.css"],
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "web_accessible_resources": [

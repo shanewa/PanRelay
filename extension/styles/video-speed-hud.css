@@ -1,0 +1,17 @@
+#panrelay-speed-hud {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 2147483645;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0f2fe;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}

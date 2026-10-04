@@ -58,7 +58,11 @@ async function commitNow() {
   const msg = buildMessage(staged.split("\n").filter(Boolean));
   const msgFile = join(root, ".git", "PANRELAY_COMMIT_MSG.txt");
   writeFileSync(msgFile, msg, "utf8");
-  execSync(`git commit -F "${msgFile}"`, { cwd: root, stdio: "inherit" });
+  execSync(`git commit -F "${msgFile}"`, {
+    cwd: root,
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
   try {
     unlinkSync(msgFile);
   } catch {

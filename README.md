@@ -1,15 +1,27 @@
+<p align="center">
+  <img src="assets/PanRelay-256.png" alt="PanRelay logo" width="160">
+</p>
+
 # PanRelay · 度盘接力存
 
 Baidu Pan relay save：在百度网盘**分享页**自动分批次转存到自己的网盘（默认每批最多 **500** 个文件），绕过网页端一次性转存数量限制。
 
-Phase 1 为纯前端 Edge / Chromium 扩展，无后端。
+纯前端 Edge / Chromium 扩展，无后端。
 
 ## 功能（当前）
+
+**接力转存**
 
 - 在 `pan.baidu.com/s/...` 分享页注入脚本
 - 读取你在页面底部设置的「保存到」路径（与官方 UI 一致）
 - 点击「保存到网盘」时，若选中项**含文件夹**或**顶层文件数超过每批上限**，扩展会接管并调用网页端 `/share/transfer` 分批转存
 - 右下角浮层显示进度与日志
+- 弹窗可调 **转存间隔**（毫秒），降低百度限流/超时概率
+
+**视频倍速**（思路参考同目录下的 `globalSpeed` 项目：`conformSpeed` + 每秒同步 `playbackRate`）
+
+- 在 `pan.baidu.com` / `yun.baidu.com` 播放页对 `video`/`audio` 生效（含 iframe）
+- 弹窗设置倍速、快捷预设、是否保持音调；非 1× 时右上角显示 HUD
 
 ## 安装（Edge 开发者模式）
 
@@ -27,7 +39,22 @@ Phase 1 为纯前端 Edge / Chromium 扩展，无后端。
 3. 点击「保存到网盘」
 4. 需要接力时，右下角会出现 PanRelay 面板并自动分批完成
 
-扩展图标弹窗可调整：是否启用、每批数量（50–500）、是否始终走接力。
+扩展图标弹窗可调整：接力开关/批次/始终接力/转存间隔；视频倍速与预设。
+
+## Logo / 图标
+
+- 主 Logo：`assets/PanRelay.png`（设计稿）
+- README 展示：`assets/PanRelay-256.png`（256×256 导出）
+- 扩展工具栏图标：`extension/icons/icon16.png` … `icon128.png`（由脚本从主 Logo 生成）
+
+更新 Logo 后执行：
+
+```bash
+wsl python3 scripts/generate_icons.py
+# 或：node scripts/generate-icons.mjs
+```
+
+然后在 `edge://extensions/` 中 **重新加载** 扩展。
 
 ## 目录结构
 
@@ -58,11 +85,13 @@ powershell -File scripts/install-git-hooks.ps1
 
 **自动提交（Cursor）**：`.cursor/hooks.json` 在编辑文件后约 8 秒防抖提交；Agent 会话结束时会立刻提交剩余改动。环境变量 `PANRELAY_COMMIT_DEBOUNCE_MS` 可改等待时间。详见 `AGENTS.md`。
 
+保存文件时若闪一下 CMD：是 Windows 上 Cursor 跑 hook 的常见现象；本项目已用隐藏 PowerShell 启动 `node`。不需要「每保存就 commit」时，可删掉 `hooks.json` 里的 `afterFileEdit`，只留 `stop`。
+
 ## 开发说明
 
 - 页面桥接依赖百度网盘页面内的 `require('system-core:context/context.js')` 与 `locals`；若百度改版导致失效，需更新 `injected/page-bridge.js` 选择器或 API。
 - 转存接口与 Cookie 均在浏览器内完成，扩展不上传账号数据。
-- 后续 Phase：分享页视频倍速控制。
+- 视频倍速若被页面强行改回 1×，可再加强 MAIN 世界 hook（Global Speed 的 GhostMode 方案）。
 
 ## 参考
 

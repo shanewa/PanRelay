@@ -9,23 +9,47 @@
   <body>
     <header>
       <h1>PanRelay</h1>
-      <p class="sub">度盘接力存 · 分享页分批转存</p>
+      <p class="sub">度盘接力存 · 视频倍速</p>
     </header>
-    <label class="row">
-      <input type="checkbox" id="enabled" />
-      <span>启用接力转存</span>
-    </label>
-    <label class="row">
-      <span>每批文件数</span>
-      <input type="number" id="batchSize" min="50" max="500" step="50" />
-    </label>
-    <label class="row">
-      <input type="checkbox" id="alwaysRelay" />
-      <span>始终走接力（含小批量）</span>
-    </label>
-    <p class="hint">
-      在百度网盘分享页选好文件、设置底部「保存到」后，点击「保存到网盘」。超过单批上限或含文件夹时，扩展会自动分批转存。
-    </p>
+
+    <section>
+      <h2>接力转存</h2>
+      <label class="row">
+        <input type="checkbox" id="enabled" />
+        <span>启用接力转存</span>
+      </label>
+      <label class="row">
+        <span>每批文件数</span>
+        <input type="number" id="batchSize" min="50" max="500" step="50" />
+      </label>
+      <label class="row">
+        <input type="checkbox" id="alwaysRelay" />
+        <span>始终走接力（含小批量）</span>
+      </label>
+      <label class="row col">
+        <span>转存间隔 <strong id="cooldownLabel">1500</strong> ms</span>
+        <input type="range" id="transferCooldownMs" min="800" max="6000" step="100" />
+      </label>
+      <p class="hint small">间隔越大越不易触发百度「请求过快/超时」，整体更慢。</p>
+    </section>
+
+    <section>
+      <h2>视频倍速</h2>
+      <label class="row">
+        <input type="checkbox" id="videoSpeedEnabled" />
+        <span>启用倍速（网盘预览/播放页）</span>
+      </label>
+      <label class="row col">
+        <span>速度 <strong id="speedLabel">1</strong>×</span>
+        <input type="range" id="videoSpeed" min="0.25" max="4" step="0.05" />
+      </label>
+      <div class="presets" id="speedPresets"></div>
+      <label class="row">
+        <input type="checkbox" id="preservePitch" checked />
+        <span>保持音调（preservesPitch）</span>
+      </label>
+    </section>
+
     <script src="popup.js"></script>
   </body>
 </html>

@@ -5,7 +5,12 @@
   'use strict';
 
   const SAVE_SELECTOR = '[node-type="bottomShareSave"], [node-type="shareSave"]';
-  const DEFAULTS = { enabled: true, batchSize: 500, alwaysRelay: false };
+  const DEFAULTS = {
+    enabled: true,
+    batchSize: 500,
+    alwaysRelay: false,
+    transferCooldownMs: 1500,
+  };
 
   let settings = { ...DEFAULTS };
   let running = false;
@@ -20,6 +25,7 @@
     if (changes.enabled) settings.enabled = changes.enabled.newValue;
     if (changes.batchSize) settings.batchSize = changes.batchSize.newValue;
     if (changes.alwaysRelay) settings.alwaysRelay = changes.alwaysRelay.newValue;
+    if (changes.transferCooldownMs) settings.transferCooldownMs = changes.transferCooldownMs.newValue;
   });
 
   function injectBridge() {
@@ -102,6 +108,7 @@
       bdstoken: meta.bdstoken,
       shareRoot: meta.shareRoot,
       batchSize: settings.batchSize,
+      transferCooldownMs: settings.transferCooldownMs,
       onProgress: (msg) => {
         setPanelStatus(msg);
         appendLog(msg);

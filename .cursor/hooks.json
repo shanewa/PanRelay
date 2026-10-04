@@ -3,13 +3,13 @@
   "hooks": {
     "afterFileEdit": [
       {
-        "command": "node \".cursor/hooks/auto-commit.mjs\"",
+        "command": "powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \".cursor/hooks/run-node-hidden.ps1\" -Script \".cursor/hooks/auto-commit.mjs\"",
         "timeout": 15
       }
     ],
     "stop": [
       {
-        "command": "node \"scripts/auto-commit.mjs\" --force",
+        "command": "powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \".cursor/hooks/run-node-hidden.ps1\" -Script \"scripts/auto-commit.mjs\" -ExtraArgs --force",
         "timeout": 60
       }
     ]
