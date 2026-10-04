@@ -69,16 +69,37 @@ input[type='range'] {
   margin-top: 4px;
 }
 
+.speed-steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.speed-steps button {
+  padding: 4px 0;
+  font-size: 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  cursor: pointer;
+}
+
+.speed-steps button:hover {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+}
+
 .presets {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
   margin-bottom: 10px;
 }
 
 .presets button {
-  padding: 4px 8px;
-  font-size: 12px;
+  padding: 5px 4px;
+  font-size: 11px;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   background: #f8fafc;
@@ -88,4 +109,11 @@ input[type='range'] {
 .presets button:hover {
   background: #e0f2fe;
   border-color: #7dd3fc;
+}
+
+.presets button.active {
+  background: #0284c7;
+  border-color: #0284c7;
+  color: #fff;
+  font-weight: 600;
 }

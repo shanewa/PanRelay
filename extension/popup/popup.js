@@ -1,4 +1,5 @@
-const SPEED_PRESETS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const { conformSpeed, formatSpeed, SPEED_PRESETS, SPEED_SMALL_STEP, SPEED_BIG_STEP } =
+  PanRelayMediaSpeed;
 
 const DEFAULTS = {
   enabled: true,
@@ -20,26 +21,58 @@ const videoSpeedEl = document.getElementById('videoSpeed');
 const speedLabelEl = document.getElementById('speedLabel');
 const preservePitchEl = document.getElementById('preservePitch');
 const speedPresetsEl = document.getElementById('speedPresets');
+const speedStepRowEl = document.getElementById('speedStepRow');
 
 function clampSpeed(v) {
-  return Math.min(4, Math.max(0.25, Math.round(Number(v) * 100) / 100));
+  return conformSpeed(v);
+}
+
+function formatSpeedLabel(speed) {
+  const fixed = formatSpeed(speed);
+  if (fixed.includes('.')) return fixed;
+  return `${fixed}.0`;
 }
 
 function updateLabels() {
   cooldownLabelEl.textContent = String(transferCooldownMsEl.value);
-  speedLabelEl.textContent = clampSpeed(videoSpeedEl.value).toFixed(2).replace(/\.?0+$/, '');
+  const speed = clampSpeed(videoSpeedEl.value);
+  speedLabelEl.textContent = formatSpeedLabel(speed);
+  speedPresetsEl.querySelectorAll('button[data-speed]').forEach((btn) => {
+    const preset = Number(btn.dataset.speed);
+    btn.classList.toggle('active', Math.abs(speed - preset) < 0.001);
+  });
 }
 
 SPEED_PRESETS.forEach((p) => {
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.textContent = `${p}×`;
+  btn.dataset.speed = String(p);
+  btn.textContent = p.toFixed(2);
   btn.addEventListener('click', () => {
     videoSpeedEl.value = String(p);
     updateLabels();
     save();
   });
   speedPresetsEl.appendChild(btn);
+});
+
+function addSpeedDelta(delta) {
+  videoSpeedEl.value = String(clampSpeed(Number(videoSpeedEl.value) + delta));
+  updateLabels();
+  save();
+}
+
+[
+  { delta: -SPEED_BIG_STEP, label: '−0.1' },
+  { delta: -SPEED_SMALL_STEP, label: '−0.01' },
+  { delta: SPEED_SMALL_STEP, label: '+0.01' },
+  { delta: SPEED_BIG_STEP, label: '+0.1' },
+].forEach(({ delta, label }) => {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = label;
+  btn.addEventListener('click', () => addSpeedDelta(delta));
+  speedStepRowEl.appendChild(btn);
 });
 
 chrome.storage.sync.get(DEFAULTS, (stored) => {

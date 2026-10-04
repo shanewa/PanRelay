@@ -70,6 +70,9 @@
     formatSpeed,
     applyPlaybackRate,
     collectMediaElements,
-    SPEED_PRESETS: [0.5, 0.75, 1, 1.25, 1.5, 2],
+    /** 与 Global Speed 默认 speedPresets 一致（12 个，弹窗 3×4 网格） */
+    SPEED_PRESETS: [0.25, 0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 16],
+    SPEED_SMALL_STEP: 0.01,
+    SPEED_BIG_STEP: 0.1,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : window);
