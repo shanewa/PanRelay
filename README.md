@@ -67,26 +67,6 @@ extension/
   popup/                    # 设置
 ```
 
-## Git hooks（与 staff-star 相同方式）
-
-克隆或拉取后在本仓库根目录执行一次：
-
-```bash
-node scripts/install-git-hooks.mjs
-```
-
-Windows PowerShell：
-
-```powershell
-powershell -File scripts/install-git-hooks.ps1
-```
-
-会安装 `pre-commit`（禁止 CRLF 进库）、`commit-msg`（去掉 `Co-authored-by`），并设置本仓库本地 `user.name` / `user.email`。
-
-**自动提交（Cursor）**：`.cursor/hooks.json` 在编辑文件后约 8 秒防抖提交；Agent 会话结束时会立刻提交剩余改动。环境变量 `PANRELAY_COMMIT_DEBOUNCE_MS` 可改等待时间。详见 `AGENTS.md`。
-
-保存文件时若闪一下 CMD：是 Windows 上 Cursor 跑 hook 的常见现象；本项目已用隐藏 PowerShell 启动 `node`。不需要「每保存就 commit」时，可删掉 `hooks.json` 里的 `afterFileEdit`，只留 `stop`。
-
 ## 开发说明
 
 - 页面桥接依赖百度网盘页面内的 `require('system-core:context/context.js')` 与 `locals`；若百度改版导致失效，需更新 `injected/page-bridge.js` 选择器或 API。
