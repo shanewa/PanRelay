@@ -16,7 +16,7 @@
   function decodePath(encoded) {
     if (!encoded) return '';
     try {
-      return decodeURIComponent(String(encoded).replace(/\+/g, '%20'));
+      return decodeURIComponent(String(encoded));
     } catch (_) {
       return String(encoded);
     }
@@ -77,6 +77,7 @@
       isdir: Number(item.isdir) === 1 ? 1 : 0,
       server_filename: item.server_filename,
       path: decodePath(item.path),
+      path_raw: item.path,
       parent_path: decodePath(item.parent_path),
     }));
   }

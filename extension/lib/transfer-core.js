@@ -21,16 +21,68 @@
     return encodeURIComponent(path).replace(/%2F/gi, '/');
   }
 
+  function decodePath(encoded) {
+    if (!encoded) return '';
+    try {
+      return decodeURIComponent(String(encoded));
+    } catch (_) {
+      return String(encoded);
+    }
+  }
+
+  /** share/list 的 dir=：优先用接口返回的原始 path，避免 + 号等被误解码 */
+  function dirQueryValue(rawPath, decodedPath) {
+    const raw = rawPath != null ? String(rawPath) : '';
+    if (raw && /%[0-9A-Fa-f]{2}/.test(raw)) {
+      if (raw.startsWith('%2F') || raw.startsWith('%2f')) return raw;
+      if (raw.startsWith('/')) return encodePath(raw);
+      return raw;
+    }
+    const decoded = decodedPath != null ? String(decodedPath) : raw;
+    return encodePath(decoded || '/');
+  }
+
+  function joinPath(...parts) {
+    return parts
+      .filter((p) => p != null && p !== '')
+      .join('/')
+      .replace(/\/+/g, '/');
+  }
+
+  function isRetriableShareError(error) {
+    if (!error) return false;
+    const msg = String(error.message || '');
+    if (/超时|timeout|繁忙|稍后再试|系统|网络/i.test(msg)) return true;
+    const errno = Number(error.errno);
+    return errno === 111 || errno === 1504 || errno === -1 || errno === 2;
+  }
+
+  function mapShareListItem(item) {
+    return {
+      id: item.fs_id,
+      name: item.server_filename,
+      isDirectory: Number(item.isdir) === 1,
+      sharePath: decodePath(item.path),
+      shareDirRaw: item.path,
+    };
+  }
+
   class ShareTransferEngine {
     constructor(options = {}) {
       this.fetch = options.fetch || globalThis.fetch.bind(globalThis);
       this.onProgress = options.onProgress || (() => {});
       this.batchSize = options.batchSize || 500;
+      this.listPageSize = options.listPageSize || 60;
       this.maxRetries = options.maxRetries ?? 12;
+      this.listMaxRetries = options.listMaxRetries ?? 10;
+      this.transferCooldownMs = options.transferCooldownMs ?? 1500;
       this.shareId = options.shareId;
+      this.failedTasks = [];
       this.userId = options.userId;
       this.bdstoken = options.bdstoken;
       this.shareRoot = options.shareRoot || '/';
+      /** @type {string} 用户选择的转存根目录（网盘路径） */
+      this.destinationRoot = options.destinationRoot || '/';
     }
 
     progress(message) {
@@ -128,10 +180,23 @@
         body: `fsidlist=${encodeURIComponent(JSON.stringify(ids))}&path=${encodeURIComponent(destination || '/')}`,
       });
       const errno = Number(data?.errno || 0);
-      if (errno === 0) return data;
-      if ((errno === 111 || errno === 1504) && retry < this.maxRetries) {
-        const delay = errno === 111 ? Math.min(30000, 5000 * (retry + 1)) : 1500;
-        this.progress(`请求过快，${Math.ceil(delay / 1000)} 秒后重试…`);
+      const errMsg = data?.show_msg || data?.errmsg || '';
+      if (errno === 0) {
+        if (this.transferCooldownMs > 0) await sleep(this.transferCooldownMs);
+        return data;
+      }
+      const retriable =
+        errno === 111 ||
+        errno === 1504 ||
+        /超时|繁忙|稍后再试|系统|网络/i.test(String(errMsg));
+      if (retriable && retry < this.maxRetries) {
+        const delay =
+          errno === 111
+            ? Math.min(30000, 5000 * (retry + 1))
+            : Math.min(30000, 3000 * (retry + 1));
+        this.progress(
+          `转存受限或超时，${Math.ceil(delay / 1000)} 秒后重试（${retry + 1}/${this.maxRetries}）…`,
+        );
         await sleep(delay);
         return this.transferIds(ids, destination, retry + 1);
       }
@@ -143,39 +208,103 @@
           { errno, response: data },
         );
       }
-      throw new PanRelayError(data?.show_msg || data?.errmsg || `转存失败 errno=${errno}`, {
+      throw new PanRelayError(errMsg || `转存失败 errno=${errno}`, {
         errno,
         response: data,
       });
     }
 
-    async listShareDirectory(path) {
-      await this.ensureBdstoken();
-      const result = [];
-      for (let page = 1; ; page += 1) {
-        const data = await this.request('/share/list', {
-          query: [
-            `uk=${encodeURIComponent(this.userId)}`,
-            `shareid=${encodeURIComponent(this.shareId)}`,
-            'order=name',
-            'desc=0',
-            'showempty=0',
-            `page=${page}`,
-            'num=100',
-            `dir=${encodePath(path)}`,
-          ].join('&'),
-          checkErrno: true,
-        });
-        const list = Array.isArray(data.list) ? data.list : [];
-        for (const item of list) {
-          result.push({
-            id: item.fs_id,
-            name: item.server_filename,
-            isDirectory: Number(item.isdir) === 1,
-            path: item.path,
-          });
+    recordFailure(name, error) {
+      const message = error?.message || String(error);
+      this.failedTasks.push({ name, message });
+      this.progress(`失败（已跳过，可稍后单独重试）：${name} — ${message}`);
+    }
+
+    async transferDirectoriesSafe(directories, destination) {
+      if (!directories.length) return;
+      try {
+        await this.transferDirectories(directories, destination);
+      } catch (error) {
+        if (directories.length === 1) {
+          this.recordFailure(directories[0].name, error);
+          return;
         }
-        if (list.length < 100) return result;
+        throw error;
+      }
+    }
+
+    shareListQuery(page, dirValue, pageSize) {
+      const num = pageSize || this.listPageSize;
+      return [
+        `uk=${encodeURIComponent(this.userId)}`,
+        `shareid=${encodeURIComponent(this.shareId)}`,
+        'web=1',
+        'app_id=250528',
+        'channel=chunlei',
+        'clienttype=0',
+        'order=time',
+        'desc=0',
+        'showempty=0',
+        `page=${page}`,
+        `num=${num}`,
+        `dir=${dirValue}`,
+        `bdstoken=${encodeURIComponent(this.bdstoken)}`,
+      ].join('&');
+    }
+
+    async fetchShareListPage(sharePath, page, shareDirRaw) {
+      await this.ensureBdstoken();
+      let lastError;
+      for (let attempt = 0; attempt < this.listMaxRetries; attempt += 1) {
+        const pageSize = attempt >= 2 ? Math.min(25, this.listPageSize) : this.listPageSize;
+        const dirValue = dirQueryValue(shareDirRaw, sharePath);
+        try {
+          const data = await this.request('/share/list', {
+            query: this.shareListQuery(page, dirValue, pageSize),
+            checkErrno: true,
+          });
+          const list = Array.isArray(data.list) ? data.list : [];
+          return { items: list.map(mapShareListItem), pageSize };
+        } catch (error) {
+          lastError = error;
+          if (!isRetriableShareError(error) || attempt >= this.listMaxRetries - 1) {
+            throw error;
+          }
+          const delay = Math.min(30000, 3000 * (attempt + 1));
+          this.progress(
+            `列举分享目录超时或繁忙，${Math.ceil(delay / 1000)} 秒后重试（${attempt + 1}/${this.listMaxRetries}）…`,
+          );
+          await sleep(delay);
+        }
+      }
+      throw lastError;
+    }
+
+    /**
+     * 分页列举并立刻转存，避免超大目录单次 list 拖垮接口。
+     */
+    async processShareDirectoryIncrementally(sourcePath, childDestination, shareDirRaw) {
+      await this.createDirectory(childDestination);
+      for (let page = 1; ; page += 1) {
+        this.progress(`读取分享目录第 ${page} 页：${sourcePath}`);
+        const { items: batch, pageSize } = await this.fetchShareListPage(
+          sourcePath,
+          page,
+          shareDirRaw,
+        );
+        if (!batch.length) break;
+
+        const childDirs = batch.filter((c) => c.isDirectory);
+        const childFiles = batch.filter((c) => !c.isDirectory);
+        for (const dir of childDirs) {
+          await this.transferDirectoriesSafe([dir], childDestination);
+        }
+        if (childFiles.length) {
+          await this.transferFiles(childFiles, childDestination);
+        }
+
+        if (batch.length < pageSize) break;
+        await sleep(600);
       }
     }
 
@@ -209,15 +338,17 @@
           return;
         }
         const directory = directories[0];
-        const relative = destination === '/' ? '' : destination;
-        const sourcePath = `${this.shareRoot}${relative}/${directory.name}`.replace(/\/+/g, '/');
-        const children = await this.listShareDirectory(sourcePath);
-        const childDestination = `${destination}/${directory.name}`.replace(/\/+/g, '/');
-        const childDirs = children.filter((c) => c.isDirectory);
-        const childFiles = children.filter((c) => !c.isDirectory);
-        await this.createDirectory(childDestination);
-        if (childDirs.length) await this.transferDirectories(childDirs, childDestination);
-        if (childFiles.length) await this.transferFiles(childFiles, childDestination);
+        const relativeDest = destination.slice(this.destinationRoot.length);
+        const sourcePath =
+          directory.sharePath ||
+          joinPath(this.shareRoot, relativeDest, directory.name);
+        this.progress(`列出分享目录：${sourcePath}`);
+        const childDestination = joinPath(destination, directory.name);
+        await this.processShareDirectoryIncrementally(
+          sourcePath,
+          childDestination,
+          directory.shareDirRaw,
+        );
       }
     }
 
@@ -225,10 +356,13 @@
       const directories = [];
       const files = [];
       for (const item of selected) {
+        const raw = item.path_raw != null ? item.path_raw : item.path;
         const entry = {
           id: item.fs_id,
           name: item.server_filename,
           isDirectory: Number(item.isdir) === 1,
+          sharePath: raw ? decodePath(raw) : undefined,
+          shareDirRaw: raw,
         };
         if (entry.isDirectory) directories.push(entry);
         else files.push(entry);
@@ -241,6 +375,8 @@
         throw new PanRelayError('分享页信息不完整，请刷新页面后重试');
       }
       const dest = destination || '/';
+      this.destinationRoot = dest;
+      this.failedTasks = [];
       const { directories, files } = this.normalizeSelection(selected);
       if (!directories.length && !files.length) {
         throw new PanRelayError('请至少选择一个文件或文件夹');
@@ -248,6 +384,12 @@
       this.progress(`开始接力转存到 ${dest}（每批最多 ${this.batchSize} 个文件）…`);
       if (directories.length) await this.transferDirectories(directories, dest);
       if (files.length) await this.transferFiles(files, dest);
+      if (this.failedTasks.length) {
+        const names = this.failedTasks.map((t) => t.name).join('、');
+        throw new PanRelayError(
+          `部分目录转存失败（${this.failedTasks.length} 项）：${names}。已成功项已在网盘中，可对未完成的子文件夹单独勾选后再点保存。`,
+        );
+      }
       this.progress('全部转存完成');
     }
   }
