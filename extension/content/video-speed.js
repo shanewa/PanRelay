@@ -1,5 +1,5 @@
 /**
- * 百度网盘在线视频/音频倍速（参考 Global Speed 的 SpeedSync.realize + MediaTower.applySpeedToAll）
+ * 百度网盘在线视频/音频倍速：周期性同步 playbackRate。
  */
 (function () {
   'use strict';

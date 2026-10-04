@@ -1,5 +1,5 @@
 /**
- * 媒体倍速工具（思路参考 Global Speed：conformSpeed + 周期性强制同步 playbackRate）
+ * 媒体倍速工具：限速区间与 playbackRate 同步。
  */
 (function (root) {
   'use strict';

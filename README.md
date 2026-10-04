@@ -18,7 +18,7 @@ Baidu Pan relay save：在百度网盘**分享页**自动分批次转存到自�
 - 右下角浮层显示进度与日志
 - 弹窗可调 **转存间隔**（毫秒），降低百度限流/超时概率
 
-**视频倍速**（思路参考同目录下的 `globalSpeed` 项目：`conformSpeed` + 每秒同步 `playbackRate`）
+**视频倍速**（对页面内 `video`/`audio` 设置倍速并周期性同步 `playbackRate`）
 
 - 在 `pan.baidu.com` / `yun.baidu.com` 播放页对 `video`/`audio` 生效（含 iframe）
 - 弹窗设置倍速、快捷预设、是否保持音调；非 1× 时右上角显示 HUD
@@ -91,7 +91,7 @@ powershell -File scripts/install-git-hooks.ps1
 
 - 页面桥接依赖百度网盘页面内的 `require('system-core:context/context.js')` 与 `locals`；若百度改版导致失效，需更新 `injected/page-bridge.js` 选择器或 API。
 - 转存接口与 Cookie 均在浏览器内完成，扩展不上传账号数据。
-- 视频倍速若被页面强行改回 1×，可再加强 MAIN 世界 hook（Global Speed 的 GhostMode 方案）。
+- 视频倍速若被页面强行改回 1×，可再在页面主世界 hook `playbackRate` 属性。
 
 ## 参考
 
