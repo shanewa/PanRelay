@@ -1,11 +1,10 @@
 /**
- * 百度网盘在线视频/音频倍速：周期性同步 playbackRate。
+ * 百度网盘在线视频/音频倍速：读设置、HUD，并同步到页面主世界 speed-main.js。
  */
 (function () {
   'use strict';
 
-  const { conformSpeed, formatSpeed, applyPlaybackRate, collectMediaElements } =
-    PanRelayMediaSpeed;
+  const { conformSpeed, formatSpeed } = PanRelayMediaSpeed;
 
   const DEFAULTS = {
     videoSpeedEnabled: true,
@@ -14,28 +13,21 @@
   };
 
   let settings = { ...DEFAULTS };
-  const bound = new WeakSet();
 
-  function realize() {
-    if (!settings.videoSpeedEnabled) return;
+  function pushConfig() {
+    document.dispatchEvent(
+      new CustomEvent('panrelay-speed-config', {
+        detail: {
+          enabled: settings.videoSpeedEnabled,
+          speed: conformSpeed(settings.videoSpeed),
+          preservePitch: settings.preservePitch,
+        },
+      }),
+    );
+  }
+
+  function updateHud() {
     const speed = conformSpeed(settings.videoSpeed);
-    collectMediaElements(document).forEach((media) => {
-      bindMedia(media);
-      applyPlaybackRate(media, speed, settings.preservePitch);
-    });
-    updateHud(speed);
-  }
-
-  function bindMedia(media) {
-    if (bound.has(media)) return;
-    bound.add(media);
-    const events = ['play', 'playing', 'loadedmetadata', 'ratechange', 'emptied'];
-    events.forEach((type) => {
-      media.addEventListener(type, () => realize(), { passive: true });
-    });
-  }
-
-  function updateHud(speed) {
     let hud = document.getElementById('panrelay-speed-hud');
     if (!settings.videoSpeedEnabled || Math.abs(speed - 1) < 0.001) {
       if (hud) hud.remove();
@@ -50,10 +42,10 @@
     hud.textContent = `${formatSpeed(speed)}×`;
   }
 
-  const observer = new MutationObserver(() => realize());
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-
-  setInterval(realize, 1000);
+  function realize() {
+    pushConfig();
+    updateHud();
+  }
 
   chrome.storage.sync.get(DEFAULTS, (stored) => {
     settings = { ...DEFAULTS, ...stored };

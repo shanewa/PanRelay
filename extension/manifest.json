@@ -37,10 +37,17 @@
     },
     {
       "matches": ["https://pan.baidu.com/*", "https://yun.baidu.com/*"],
+      "js": ["injected/speed-main.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": ["https://pan.baidu.com/*", "https://yun.baidu.com/*"],
       "js": ["lib/media-speed.js", "content/video-speed.js"],
       "css": ["styles/video-speed-hud.css"],
       "run_at": "document_idle",
-      "all_frames": true
+      "all_frames": false
     }
   ],
   "web_accessible_resources": [
