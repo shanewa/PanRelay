@@ -21,8 +21,15 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const hideWindow = { windowsHide: true };
+
 function run(cmd) {
-  return execSync(cmd, { cwd: root, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
+  return execSync(cmd, {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+    ...hideWindow,
+  });
 }
 
 function porcelainPaths() {
@@ -47,7 +54,11 @@ async function commitNow() {
   const paths = porcelainPaths();
   if (!paths.length) return false;
 
-  const add = spawnSync("git", ["add", "--", ...paths], { cwd: root, encoding: "utf8" });
+  const add = spawnSync("git", ["add", "--", ...paths], {
+    cwd: root,
+    encoding: "utf8",
+    ...hideWindow,
+  });
   if (add.status !== 0) {
     throw new Error(add.stderr || add.stdout || "git add failed");
   }

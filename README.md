@@ -50,8 +50,8 @@ Baidu Pan relay save：在百度网盘**分享页**自动分批次转存到自�
 更新 Logo 后执行：
 
 ```bash
-wsl python3 scripts/generate_icons.py
-# 或：node scripts/generate-icons.mjs
+node scripts/generate-icons.mjs
+# 或：python scripts/generate_icons.py
 ```
 
 然后在 `edge://extensions/` 中 **重新加载** 扩展。

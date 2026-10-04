@@ -11,7 +11,7 @@
   - 克隆或拉取后执行 `node scripts/install-git-hooks.mjs`（Windows 也可用 `powershell -File scripts/install-git-hooks.ps1`）。安装脚本会写入本仓库**本地** `user.name` / `user.email`；`commit-msg` 会删掉 `Co-authored-by`；`pre-commit` 会拒绝暂存区中的 CRLF。
   - **换行符**：文本文件一律 **LF**（见 `.gitattributes`、`.editorconfig`）。若 `git add` 报 CRLF，执行 `node scripts/normalize-worktree-lf.mjs` 后重试。
   - Cursor：**Settings → Git & PRs → Attribution → Commit Attribution** 建议关闭，避免署名行触发 hook 失败。
-- **自动提交**：`.cursor/hooks.json` 在 `afterFileEdit` 后防抖提交（默认 8s，`PANRELAY_COMMIT_DEBOUNCE_MS` 可改）；Agent 结束 `stop` 时会 `--force` 提交剩余改动。不提交 `.env` 等敏感路径。
+- **自动提交**：`.cursor/hooks.json` 在 `afterFileEdit` 后防抖提交（默认 8s，`PANRELAY_COMMIT_DEBOUNCE_MS` 可改）；Agent 结束 `stop` 时会 `--force` 提交剩余改动。不提交 `.env` 等敏感路径。Windows 下 hook 经 `wscript` + `run-node-hidden.vbs` 启动 node，避免 CMD 一闪而过；Agent 在本机勿用 `wsl` 跑仓库脚本。
 - **提交信息**：首行说明「为什么」；空一行后 bullet 列「做了什么」（自动提交脚本会生成 `自动保存工作区改动` 模板）。
 
 ## Workflow（Agent 收尾，强制）
