@@ -40,7 +40,7 @@
       "js": ["injected/speed-main.js"],
       "run_at": "document_start",
       "world": "MAIN",
-      "all_frames": false
+      "all_frames": true
     },
     {
       "matches": ["https://pan.baidu.com/*", "https://yun.baidu.com/*"],

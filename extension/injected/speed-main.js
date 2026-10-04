@@ -1,5 +1,6 @@
 /**
- * 页面主世界：应用倍速（与网盘播放器同一 JS 环境，避免 isolated world 无效）。
+ * 页面主世界：应用倍速（与网盘播放器同一 JS 环境）。
+ * 配置经 localStorage + 主世界 CustomEvent 同步（含同源 iframe）。
  */
 (function () {
   'use strict';
@@ -7,24 +8,20 @@
   if (window.__panRelaySpeedMain) return;
   window.__panRelaySpeedMain = true;
 
+  const STORAGE_KEY = '__panrelay_speed__';
   const MIN_SPEED = 0.07;
   const MAX_SPEED = 16;
 
   let cfg = { enabled: true, speed: 1, preservePitch: true };
-  let ghostActive = false;
 
-  const ogDesc = {
-    playbackRate: Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'playbackRate'),
-    defaultPlaybackRate: Object.getOwnPropertyDescriptor(
-      HTMLMediaElement.prototype,
-      'defaultPlaybackRate',
-    ),
-  };
-  const coherence = {
-    playbackRate: new WeakMap(),
-    defaultPlaybackRate: new WeakMap(),
-  };
-  const dummyAudio = new Audio();
+  const nativeRate = Object.getOwnPropertyDescriptor(
+    HTMLMediaElement.prototype,
+    'playbackRate',
+  );
+  const nativeDefaultRate = Object.getOwnPropertyDescriptor(
+    HTMLMediaElement.prototype,
+    'defaultPlaybackRate',
+  );
 
   function conformSpeed(speed) {
     const n = Number(speed);
@@ -50,21 +47,26 @@
     return list;
   }
 
-  function applyToMedia(media, speed, preservesPitch) {
-    const value = conformSpeed(speed);
+  function setNativeRate(media, value) {
     try {
-      if (Math.abs(media.playbackRate - value) > 0.001) {
-        media.playbackRate = value;
-      }
+      if (nativeRate?.set) nativeRate.set.call(media, value);
+      else media.playbackRate = value;
     } catch (_) {
       /* ignore */
     }
     try {
-      if (Math.abs(media.defaultPlaybackRate - value) > 0.001) {
-        media.defaultPlaybackRate = value;
-      }
+      if (nativeDefaultRate?.set) nativeDefaultRate.set.call(media, value);
+      else media.defaultPlaybackRate = value;
     } catch (_) {
       /* ignore */
+    }
+  }
+
+  function applyToMedia(media, speed, preservesPitch) {
+    const value = conformSpeed(speed);
+    const cur = nativeRate?.get ? nativeRate.get.call(media) : media.playbackRate;
+    if (Math.abs(cur - value) > 0.001) {
+      setNativeRate(media, value);
     }
     const keepPitch = preservesPitch !== false;
     try {
@@ -76,63 +78,27 @@
     }
   }
 
-  function installGhostHook() {
-    if (!ogDesc.playbackRate || !ogDesc.defaultPlaybackRate) return;
-    for (const key of ['playbackRate', 'defaultPlaybackRate']) {
-      const desc = ogDesc[key];
-      const map = coherence[key];
-      try {
-        Object.defineProperty(HTMLMediaElement.prototype, key, {
-          configurable: true,
-          enumerable: true,
-          get() {
-            if (ghostActive && map.has(this)) {
-              return map.get(this);
-            }
-            return desc.get.call(this);
-          },
-          set(newValue) {
-            if (ghostActive) {
-              try {
-                desc.set.call(dummyAudio, newValue);
-                const rate = desc.get.call(dummyAudio);
-                map.set(this, rate);
-              } catch (err) {
-                throw err;
-              }
-              return;
-            }
-            return desc.set.call(this, newValue);
-          },
-        });
-      } catch (_) {
-        /* ignore */
-      }
-    }
+  function mergeConfig(detail) {
+    if (!detail || typeof detail !== 'object') return;
+    if (typeof detail.enabled === 'boolean') cfg.enabled = detail.enabled;
+    if (detail.speed != null) cfg.speed = detail.speed;
+    if (typeof detail.preservePitch === 'boolean') cfg.preservePitch = detail.preservePitch;
   }
 
-  function setGhostActive(active) {
-    if (active === ghostActive) return;
-    ghostActive = active;
-    if (active) {
-      collectMedia().forEach((m) => {
-        coherence.playbackRate.set(m, ogDesc.playbackRate.get.call(m));
-        coherence.defaultPlaybackRate.set(m, ogDesc.defaultPlaybackRate.get.call(m));
-      });
+  function readConfigFromStorage() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      mergeConfig(JSON.parse(raw));
+    } catch (_) {
+      /* ignore */
     }
-  }
-
-  function shouldUseGhost() {
-    return cfg.enabled && Math.abs(conformSpeed(cfg.speed) - 1) > 0.001;
   }
 
   function applyAll() {
-    if (!cfg.enabled) {
-      setGhostActive(false);
-      return;
-    }
+    readConfigFromStorage();
+    if (!cfg.enabled) return;
     const speed = conformSpeed(cfg.speed);
-    setGhostActive(shouldUseGhost());
     collectMedia().forEach((m) => applyToMedia(m, speed, cfg.preservePitch));
   }
 
@@ -142,28 +108,34 @@
     realizeTimer = window.setTimeout(() => {
       realizeTimer = 0;
       applyAll();
-    }, 120);
+    }, 80);
   }
 
   document.addEventListener(
     'panrelay-speed-config',
     (event) => {
-      const detail = event.detail || {};
-      if (typeof detail.enabled === 'boolean') cfg.enabled = detail.enabled;
-      if (detail.speed != null) cfg.speed = detail.speed;
-      if (typeof detail.preservePitch === 'boolean') cfg.preservePitch = detail.preservePitch;
+      mergeConfig(event.detail || {});
       applyAll();
     },
     false,
   );
 
-  const mediaEvents = ['play', 'playing', 'loadedmetadata', 'ratechange', 'emptied'];
-  mediaEvents.forEach((type) => {
-    document.addEventListener(type, (e) => {
-      if (e.target instanceof HTMLMediaElement) scheduleApply();
-    }, true);
+  window.addEventListener('storage', (event) => {
+    if (event.key === STORAGE_KEY) scheduleApply();
   });
 
-  installGhostHook();
-  setInterval(applyAll, 1000);
+  const mediaEvents = ['play', 'playing', 'loadedmetadata', 'ratechange', 'emptied', 'canplay'];
+  mediaEvents.forEach((type) => {
+    document.addEventListener(
+      type,
+      (e) => {
+        if (e.target instanceof HTMLMediaElement) scheduleApply();
+      },
+      true,
+    );
+  });
+
+  readConfigFromStorage();
+  applyAll();
+  setInterval(applyAll, 800);
 })();

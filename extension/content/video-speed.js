@@ -1,10 +1,12 @@
 /**
- * 百度网盘在线视频/音频倍速：读设置、HUD，并同步到页面主世界 speed-main.js。
+ * 读扩展设置、HUD；经 localStorage + 主世界脚本事件同步到 speed-main.js。
  */
 (function () {
   'use strict';
 
   const { conformSpeed, formatSpeed } = PanRelayMediaSpeed;
+
+  const STORAGE_KEY = '__panrelay_speed__';
 
   const DEFAULTS = {
     videoSpeedEnabled: true,
@@ -14,16 +16,32 @@
 
   let settings = { ...DEFAULTS };
 
+  function buildDetail() {
+    return {
+      enabled: settings.videoSpeedEnabled,
+      speed: conformSpeed(settings.videoSpeed),
+      preservePitch: settings.preservePitch,
+      ts: Date.now(),
+    };
+  }
+
+  /** isolated world 的 CustomEvent 主世界收不到，须注入脚本派发 */
+  function pushConfigToPage(detail) {
+    const payload = JSON.stringify(detail).replace(/</g, '\\u003c');
+    const el = document.createElement('script');
+    el.textContent = `document.dispatchEvent(new CustomEvent('panrelay-speed-config',{detail:${payload}}));`;
+    (document.documentElement || document.head || document.body).appendChild(el);
+    el.remove();
+  }
+
   function pushConfig() {
-    document.dispatchEvent(
-      new CustomEvent('panrelay-speed-config', {
-        detail: {
-          enabled: settings.videoSpeedEnabled,
-          speed: conformSpeed(settings.videoSpeed),
-          preservePitch: settings.preservePitch,
-        },
-      }),
-    );
+    const detail = buildDetail();
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(detail));
+    } catch (_) {
+      /* ignore */
+    }
+    pushConfigToPage(detail);
   }
 
   function updateHud() {
