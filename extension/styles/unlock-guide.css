@@ -1,0 +1,102 @@
+#panrelay-unlock-guide {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483646;
+  width: 280px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+  font-size: 13px;
+  color: #e8eef7;
+}
+
+.panrelay-unlock-guide-inner {
+  position: relative;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  padding: 14px 14px 12px;
+}
+
+.panrelay-unlock-guide-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.panrelay-unlock-guide-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #7dd3fc;
+  padding-right: 18px;
+  margin-bottom: 6px;
+}
+
+.panrelay-unlock-guide-desc,
+.panrelay-unlock-guide-foot,
+.panrelay-unlock-guide-msg {
+  margin: 0 0 8px;
+  line-height: 1.5;
+  color: #cbd5e1;
+}
+
+.panrelay-unlock-guide-foot {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.panrelay-unlock-guide-steps {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  color: #e2e8f0;
+  line-height: 1.55;
+}
+
+.panrelay-unlock-guide-qr {
+  display: block;
+  width: 148px;
+  height: 148px;
+  margin: 0 auto 10px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.panrelay-unlock-guide-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+  padding: 7px 8px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 15px;
+  letter-spacing: 0.1em;
+}
+
+.panrelay-unlock-guide-btn {
+  width: 100%;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 8px;
+  background: #0284c7;
+  color: #fff;
+  cursor: pointer;
+}
+
+.panrelay-unlock-guide-msg {
+  margin-top: 8px;
+  color: #fca5a5;
+}
+
+.panrelay-unlock-guide-msg.is-ok {
+  color: #6ee7b7;
+}

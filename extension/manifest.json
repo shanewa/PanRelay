@@ -9,7 +9,7 @@
     "https://yun.baidu.com/*"
   ],
   "action": {
-    "default_title": "PanRelay 度盘接力存",
+    "default_title": "PanRelay：点此扫码关注公众号解锁（免费）",
     "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
@@ -24,6 +24,9 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": [
@@ -34,6 +37,13 @@
       "js": ["lib/transfer-core.js", "content/share-relay.js"],
       "css": ["styles/relay-panel.css"],
       "run_at": "document_start"
+    },
+    {
+      "matches": ["https://pan.baidu.com/*", "https://yun.baidu.com/*"],
+      "js": ["lib/unlock.js", "content/unlock-guide.js"],
+      "css": ["styles/unlock-guide.css"],
+      "run_at": "document_idle",
+      "all_frames": false
     },
     {
       "matches": ["https://pan.baidu.com/*", "https://yun.baidu.com/*"],
@@ -52,7 +62,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["injected/page-bridge.js"],
+      "resources": ["injected/page-bridge.js", "assets/wechat-oa-qr.jpg"],
       "matches": ["https://pan.baidu.com/*", "https://yun.baidu.com/*"]
     }
   ]
