@@ -81,6 +81,8 @@ node scripts/generate-icons.mjs
 ## 目录结构
 
 ```
+docs/
+  architecture.md           # 实现原理与详细设计
 extension/
   manifest.json
   content/share-relay.js    # 拦截保存按钮、进度 UI
