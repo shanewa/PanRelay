@@ -8,6 +8,8 @@ Baidu Pan relay save：在百度网盘**分享页**自动分批次转存到自�
 
 纯前端 Edge / Chromium 扩展，无后端。插件完全免费，首次使用需关注公众号并填写解锁码。
 
+实现细节见 [docs/architecture.md](docs/architecture.md)。
+
 ## 功能（当前）
 
 **接力转存**
