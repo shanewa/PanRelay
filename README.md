@@ -44,6 +44,8 @@ Baidu Pan relay save：在百度网盘**分享页**自动分批次转存到自�
 
 ## Logo / 图标
 
+Logo 把百度网盘做成章鱼的身体与触手：盘是躯干，触手是接力转存与倍速等能力，寓意插件可以强化百度网盘。
+
 - 主 Logo：`assets/PanRelay.png`（设计稿）
 - README 展示：`assets/PanRelay-256.png`（256×256 导出）
 - 扩展工具栏图标：`extension/icons/icon16.png` … `icon128.png`（由脚本从主 Logo 生成）
