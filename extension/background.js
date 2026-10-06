@@ -4,13 +4,13 @@
 function syncBadge(unlocked) {
   if (unlocked) {
     chrome.action.setBadgeText({ text: '' });
-    chrome.action.setTitle({ title: 'PanRelay 度盘接力存' });
+    chrome.action.setTitle({ title: '度盘接力存' });
     return;
   }
   chrome.action.setBadgeText({ text: '关注' });
   chrome.action.setBadgeBackgroundColor({ color: '#0284c7' });
   chrome.action.setTitle({
-    title: 'PanRelay：请先点图标，扫码关注公众号解锁（免费）',
+    title: '度盘接力存：请先点图标，扫码关注公众号解锁（免费）',
   });
 }
 

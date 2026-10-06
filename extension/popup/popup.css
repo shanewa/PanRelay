@@ -118,12 +118,6 @@ input[type='range'] {
   font-weight: 600;
 }
 
-.unlock-badge {
-  margin: 0 0 10px;
-  font-size: 11px;
-  color: #047857;
-}
-
 .unlock-gate {
   margin-bottom: 4px;
 }

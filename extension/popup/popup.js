@@ -26,7 +26,6 @@ const speedPresetsEl = document.getElementById('speedPresets');
 const speedStepRowEl = document.getElementById('speedStepRow');
 const unlockGateEl = document.getElementById('unlockGate');
 const settingsRootEl = document.getElementById('settingsRoot');
-const unlockBadgeEl = document.getElementById('unlockBadge');
 const unlockKeywordEl = document.getElementById('unlockKeyword');
 const unlockCodeEl = document.getElementById('unlockCode');
 const unlockBtnEl = document.getElementById('unlockBtn');
@@ -49,7 +48,6 @@ function setUnlockMessage(text, kind) {
 function renderUnlockState(unlocked) {
   unlockGateEl.hidden = unlocked;
   settingsRootEl.hidden = !unlocked;
-  unlockBadgeEl.hidden = !unlocked;
 }
 
 function submitUnlock() {
