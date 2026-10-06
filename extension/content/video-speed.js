@@ -12,14 +12,16 @@
     videoSpeedEnabled: true,
     videoSpeed: 1,
     preservePitch: true,
+    unlocked: false,
   };
 
   let settings = { ...DEFAULTS };
 
   function buildDetail() {
+    const unlocked = !!settings.unlocked;
     return {
-      enabled: settings.videoSpeedEnabled,
-      speed: conformSpeed(settings.videoSpeed),
+      enabled: unlocked && settings.videoSpeedEnabled,
+      speed: unlocked ? conformSpeed(settings.videoSpeed) : 1,
       preservePitch: settings.preservePitch,
       ts: Date.now(),
     };
@@ -47,7 +49,7 @@
   function updateHud() {
     const speed = conformSpeed(settings.videoSpeed);
     let hud = document.getElementById('panrelay-speed-hud');
-    if (!settings.videoSpeedEnabled || Math.abs(speed - 1) < 0.001) {
+    if (!settings.unlocked || !settings.videoSpeedEnabled || Math.abs(speed - 1) < 0.001) {
       if (hud) hud.remove();
       return;
     }
@@ -75,6 +77,7 @@
     if (changes.videoSpeedEnabled) settings.videoSpeedEnabled = changes.videoSpeedEnabled.newValue;
     if (changes.videoSpeed) settings.videoSpeed = changes.videoSpeed.newValue;
     if (changes.preservePitch) settings.preservePitch = changes.preservePitch.newValue;
+    if (changes.unlocked) settings.unlocked = changes.unlocked.newValue;
     realize();
   });
 })();

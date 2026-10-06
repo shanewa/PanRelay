@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PanRelay · 度盘接力存",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "百度网盘分享页分批接力转存 + 在线视频倍速。",
   "permissions": ["storage"],
   "host_permissions": [

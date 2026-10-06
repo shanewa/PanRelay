@@ -10,8 +10,41 @@
     <header>
       <h1>PanRelay</h1>
       <p class="sub">度盘接力存 · 视频倍速</p>
+      <p class="unlock-badge" id="unlockBadge" hidden>已关注解锁 · 完全免费</p>
     </header>
 
+    <section id="unlockGate" class="unlock-gate" hidden>
+      <h2>关注公众号解锁</h2>
+      <p class="hint">插件完全免费。请先关注公众号，这样你在使用中遇到问题可以直接给作者发消息，方便我们改进。</p>
+      <ol class="unlock-steps">
+        <li>微信扫码关注公众号</li>
+        <li>发送 <strong id="unlockKeyword">百度网盘插件</strong></li>
+        <li>把回复里的 <strong>6 位数字</strong> 填到下方</li>
+      </ol>
+      <img
+        class="oa-qr"
+        id="oaQr"
+        src="../assets/wechat-oa-qr.jpg"
+        alt="公众号二维码"
+        title="点击放大"
+      />
+      <p class="hint small">用微信扫一扫；也可把二维码保存后扫码。</p>
+      <label class="row col">
+        <span>解锁码</span>
+        <input
+          type="text"
+          id="unlockCode"
+          inputmode="numeric"
+          maxlength="12"
+          placeholder="6 位数字"
+          autocomplete="off"
+        />
+      </label>
+      <button type="button" class="unlock-btn" id="unlockBtn">解锁</button>
+      <p class="unlock-msg" id="unlockMsg" hidden></p>
+    </section>
+
+    <div id="settingsRoot">
     <section>
       <h2>接力转存</h2>
       <label class="row">
@@ -51,6 +84,8 @@
       </label>
     </section>
 
+    </div>
+    <script src="../lib/unlock.js"></script>
     <script src="../lib/media-speed.js"></script>
     <script src="popup.js"></script>
   </body>

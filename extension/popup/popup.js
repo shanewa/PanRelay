@@ -1,5 +1,6 @@
 const { conformSpeed, formatSpeed, SPEED_PRESETS, SPEED_SMALL_STEP, SPEED_BIG_STEP } =
   PanRelayMediaSpeed;
+const { KEYWORD, STORAGE_KEY, verifyUnlockInput, isUnlocked } = PanRelayUnlock;
 
 const DEFAULTS = {
   enabled: true,
@@ -9,6 +10,7 @@ const DEFAULTS = {
   videoSpeedEnabled: true,
   videoSpeed: 1,
   preservePitch: true,
+  [STORAGE_KEY]: false,
 };
 
 const enabledEl = document.getElementById('enabled');
@@ -22,6 +24,45 @@ const speedLabelEl = document.getElementById('speedLabel');
 const preservePitchEl = document.getElementById('preservePitch');
 const speedPresetsEl = document.getElementById('speedPresets');
 const speedStepRowEl = document.getElementById('speedStepRow');
+const unlockGateEl = document.getElementById('unlockGate');
+const settingsRootEl = document.getElementById('settingsRoot');
+const unlockBadgeEl = document.getElementById('unlockBadge');
+const unlockKeywordEl = document.getElementById('unlockKeyword');
+const unlockCodeEl = document.getElementById('unlockCode');
+const unlockBtnEl = document.getElementById('unlockBtn');
+const unlockMsgEl = document.getElementById('unlockMsg');
+const oaQrEl = document.getElementById('oaQr');
+
+unlockKeywordEl.textContent = KEYWORD;
+
+function setUnlockMessage(text, kind) {
+  if (!text) {
+    unlockMsgEl.hidden = true;
+    unlockMsgEl.textContent = '';
+    return;
+  }
+  unlockMsgEl.hidden = false;
+  unlockMsgEl.className = `unlock-msg ${kind || ''}`;
+  unlockMsgEl.textContent = text;
+}
+
+function renderUnlockState(unlocked) {
+  unlockGateEl.hidden = unlocked;
+  settingsRootEl.hidden = !unlocked;
+  unlockBadgeEl.hidden = !unlocked;
+}
+
+function submitUnlock() {
+  const value = unlockCodeEl.value;
+  if (!verifyUnlockInput(value)) {
+    setUnlockMessage('解锁码不正确。请确认已关注公众号并发送了关键词。', 'error');
+    return;
+  }
+  chrome.storage.sync.set({ [STORAGE_KEY]: true }, () => {
+    setUnlockMessage('已解锁，插件完全免费。', 'ok');
+    renderUnlockState(true);
+  });
+}
 
 function clampSpeed(v) {
   return conformSpeed(v);
@@ -84,6 +125,7 @@ chrome.storage.sync.get(DEFAULTS, (stored) => {
   videoSpeedEl.value = stored.videoSpeed ?? 1;
   preservePitchEl.checked = stored.preservePitch !== false;
   updateLabels();
+  renderUnlockState(isUnlocked(stored));
 });
 
 function save() {
@@ -121,3 +163,10 @@ videoSpeedEl.addEventListener('input', () => {
   save();
 });
 preservePitchEl.addEventListener('change', save);
+unlockBtnEl.addEventListener('click', submitUnlock);
+unlockCodeEl.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') submitUnlock();
+});
+oaQrEl.addEventListener('click', () => {
+  window.open(oaQrEl.src, '_blank');
+});

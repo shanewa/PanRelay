@@ -117,3 +117,69 @@ input[type='range'] {
   color: #fff;
   font-weight: 600;
 }
+
+.unlock-badge {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: #047857;
+}
+
+.unlock-gate {
+  margin-bottom: 4px;
+}
+
+.unlock-steps {
+  margin: 8px 0 12px;
+  padding-left: 18px;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.oa-qr {
+  display: block;
+  width: 168px;
+  height: 168px;
+  margin: 0 auto 8px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  cursor: zoom-in;
+}
+
+#unlockCode {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  font-size: 16px;
+  letter-spacing: 0.12em;
+}
+
+.unlock-btn {
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 0;
+  border: none;
+  border-radius: 8px;
+  background: #0284c7;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.unlock-btn:hover {
+  background: #0369a1;
+}
+
+.unlock-msg {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
+.unlock-msg.error {
+  color: #b91c1c;
+}
+
+.unlock-msg.ok {
+  color: #047857;
+}
