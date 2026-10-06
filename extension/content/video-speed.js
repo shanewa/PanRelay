@@ -46,26 +46,72 @@
     pushConfigToPage(detail);
   }
 
+  function findVolumeGroup(root) {
+    const icon = root.querySelector(
+      '.vp-video__control-bar--button.is-icon .u-icon-volume',
+    );
+    if (icon) {
+      return icon.closest('.vp-video__control-bar--button-group');
+    }
+    const mute = root.querySelector('.vp-video-volume-panel, .vjs-volume-panel');
+    return mute || null;
+  }
+
+  function ensureHudHost() {
+    const volumeGroup = findVolumeGroup(document);
+    if (!volumeGroup || !volumeGroup.parentNode) return null;
+
+    let wrap = document.getElementById('panrelay-speed-hud-wrap');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = 'panrelay-speed-hud-wrap';
+      wrap.className = 'vp-video__control-bar--button-group';
+    }
+    if (wrap.nextElementSibling !== volumeGroup || wrap.parentNode !== volumeGroup.parentNode) {
+      volumeGroup.parentNode.insertBefore(wrap, volumeGroup);
+    }
+    wrap.classList.toggle(
+      'vp-video__control-bar--button-group',
+      volumeGroup.classList.contains('vp-video__control-bar--button-group'),
+    );
+    return wrap;
+  }
+
   function updateHud() {
     const speed = conformSpeed(settings.videoSpeed);
-    let hud = document.getElementById('panrelay-speed-hud');
-    if (!settings.unlocked || !settings.videoSpeedEnabled || Math.abs(speed - 1) < 0.001) {
-      if (hud) hud.remove();
+    const hide =
+      !settings.unlocked || !settings.videoSpeedEnabled || Math.abs(speed - 1) < 0.001;
+    const existing = document.getElementById('panrelay-speed-hud');
+    const wrapExisting = document.getElementById('panrelay-speed-hud-wrap');
+    if (hide) {
+      if (existing) existing.remove();
+      if (wrapExisting) wrapExisting.remove();
       return;
     }
+
+    const host = ensureHudHost();
+    if (!host) return;
+
+    let hud = document.getElementById('panrelay-speed-hud');
     if (!hud) {
       hud = document.createElement('div');
       hud.id = 'panrelay-speed-hud';
-      hud.title = 'PanRelay 视频倍速';
-      document.documentElement.appendChild(hud);
+      hud.title = 'PanRelay 倍速（在扩展弹窗调节）';
     }
-    hud.textContent = `${formatSpeed(speed)}×`;
+    const inPlayerBar = host.classList.contains('vp-video__control-bar--button-group');
+    hud.className = inPlayerBar
+      ? 'vp-video__control-bar--button is-text'
+      : 'panrelay-speed-hud--fallback';
+    hud.textContent = `${formatSpeed(speed)}x`;
+    if (hud.parentNode !== host) host.appendChild(hud);
   }
 
   function realize() {
     pushConfig();
     updateHud();
   }
+
+  setInterval(updateHud, 1000);
 
   chrome.storage.sync.get(DEFAULTS, (stored) => {
     settings = { ...DEFAULTS, ...stored };
