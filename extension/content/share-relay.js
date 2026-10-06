@@ -122,9 +122,7 @@
   async function onSaveClick(event) {
     if (!settings.enabled || running) return;
     if (!settings.unlocked) {
-      ensurePanel();
-      setPanelStatus('请先关注公众号解锁（完全免费，便于遇到问题联系作者）');
-      appendLog('点击工具栏 PanRelay 图标扫码关注：遇到问题可直接联系作者改进。关注后发送「百度网盘插件」获取解锁码。本次仍走网页原生长保存。');
+      PanRelayUnlockGuide.showGuide({ force: true });
       return;
     }
 

@@ -34,16 +34,9 @@
         "https://pan.baidu.com/share/init*",
         "https://yun.baidu.com/s/*"
       ],
-      "js": ["lib/transfer-core.js", "content/share-relay.js"],
-      "css": ["styles/relay-panel.css"],
+      "js": ["lib/transfer-core.js", "lib/unlock.js", "content/unlock-guide.js", "content/share-relay.js"],
+      "css": ["styles/relay-panel.css", "styles/unlock-guide.css"],
       "run_at": "document_start"
-    },
-    {
-      "matches": ["https://pan.baidu.com/*", "https://yun.baidu.com/*"],
-      "js": ["lib/unlock.js", "content/unlock-guide.js"],
-      "css": ["styles/unlock-guide.css"],
-      "run_at": "document_idle",
-      "all_frames": false
     },
     {
       "matches": ["https://pan.baidu.com/*", "https://yun.baidu.com/*"],
