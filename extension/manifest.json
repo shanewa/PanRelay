@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "度盘接力存",
   "version": "0.3.0",
-  "description": "百度网盘分享页分批接力转存 + 在线视频倍速。",
+  "description": "百度网盘分享页：用户点击保存后可分批转存；播放页可选倍速。需自行登录，无后端。",
   "permissions": ["storage"],
   "host_permissions": [
     "https://pan.baidu.com/*",

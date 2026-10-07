@@ -4,11 +4,13 @@
 
 # PanRelay · 度盘接力存
 
-Baidu Pan relay save：在百度网盘**分享页**自动分批次转存到自己的网盘（默认每批最多 **500** 个文件），绕过网页端一次性转存数量限制。
+Baidu Pan relay save：在百度网盘**分享页**，在你点击「保存到网盘」后，按与网页相同的接口**分批**转存到自己的网盘（默认每批最多 **500** 个文件），并可在弹窗调节转存间隔。
 
-纯前端 Edge / Chromium 扩展，无后端。插件完全免费，首次使用需关注公众号并填写解锁码。
+纯前端 Edge / Chromium 扩展，无后端。插件完全免费，首次使用需关注公众号并填写解锁码。请先在浏览器中**自行登录**百度网盘；扩展不保存百度账号密码，转存请求仅使用浏览器已有登录状态。
 
-实现细节见 [docs/architecture.md](docs/architecture.md)。
+- 实现细节：[docs/architecture.md](docs/architecture.md)
+- 隐私说明（商店提审）：[docs/PRIVACY.md](docs/PRIVACY.md)
+- 商店文案草稿：[docs/store-listing.md](docs/store-listing.md)
 
 ## 功能（当前）
 
@@ -16,7 +18,7 @@ Baidu Pan relay save：在百度网盘**分享页**自动分批次转存到自�
 
 - 在 `pan.baidu.com/s/...` 分享页注入脚本
 - 读取你在页面底部设置的「保存到」路径（与官方 UI 一致）
-- 点击「保存到网盘」时，若选中项**含文件夹**或**顶层文件数超过每批上限**，扩展会接管并调用网页端 `/share/transfer` 分批转存
+- **仅在你点击**「保存到网盘」时：若选中项含文件夹或顶层文件数超过每批上限，扩展会接管并调用网页端 `/share/transfer` 分批转存（不会在后台静默跑任务）
 - 右下角浮层显示进度与日志
 - 弹窗可调 **转存间隔**（毫秒），降低百度限流/超时概率
 
@@ -83,6 +85,8 @@ node scripts/generate-icons.mjs
 ```
 docs/
   architecture.md           # 实现原理与详细设计
+  PRIVACY.md                # 隐私说明（商店隐私政策链接）
+  store-listing.md          # Chrome / Edge 上架文案草稿
 extension/
   manifest.json
   content/share-relay.js    # 拦截保存按钮、进度 UI
@@ -96,7 +100,7 @@ extension/
 ## 开发说明
 
 - 页面桥接依赖百度网盘页面内的 `require('system-core:context/context.js')` 与 `locals`；若百度改版导致失效，需更新 `injected/page-bridge.js` 选择器或 API。
-- 转存接口与 Cookie 均在浏览器内完成，扩展不上传账号数据。
+- 转存接口与 Cookie 均在浏览器内完成，扩展不上传百度账号密码；详见 [docs/PRIVACY.md](docs/PRIVACY.md)。
 - 视频倍速若被页面强行改回 1×，可再在页面主世界 hook `playbackRate` 属性。
 
 ## 参考
