@@ -11,6 +11,7 @@ Baidu Pan relay save：在百度网盘**分享页**，在你点击「保存到�
 - 实现细节：[docs/architecture.md](docs/architecture.md)
 - 隐私说明（商店提审）：[docs/PRIVACY.md](docs/PRIVACY.md)
 - 商店文案草稿：[docs/store-listing.md](docs/store-listing.md)
+- 上架审核清单：[docs/store-review.md](docs/store-review.md)
 
 ## 功能（当前）
 
@@ -87,6 +88,7 @@ docs/
   architecture.md           # 实现原理与详细设计
   PRIVACY.md                # 隐私说明（商店隐私政策链接）
   store-listing.md          # Chrome / Edge 上架文案草稿
+  store-review.md           # 发版前审核自检清单
 extension/
   manifest.json
   content/share-relay.js    # 拦截保存按钮、进度 UI
