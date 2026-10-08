@@ -11,7 +11,7 @@
 ## 发版前 5 分钟
 
 - [ ] `manifest.json` 的 `version` 已递增
-- [ ] 打包目录仅为 `extension/`（无 `.git`、无 `scripts/`、无密钥）
+- [ ] 已执行 `make pack` 或 `node scripts/pack-extension.mjs`，zip 根目录为 `manifest.json`（见 README「打包」）
 - [ ] 商店「隐私政策 URL」指向公开的 [PRIVACY.md](PRIVACY.md)
 - [ ] 商店描述复制自 [store-listing.md](store-listing.md)，未含禁用用语
 - [ ] 本地在分享页走一遍：未登录提示、解锁、点击保存、分批日志、小批量走官方保存
@@ -105,7 +105,7 @@
 
 | 项 | 状态 | 说明 |
 |----|------|------|
-| 上传 zip 仅含 `extension/` 内容 | [ ] | 发版时执行 |
+| 上传 zip 仅含 `extension/` 白名单文件 | [x] | `make pack` → `dist/PanRelay-<version>.zip` |
 | 图标 128 / 48 等齐全 | [x] | `extension/icons/` |
 | 权限声明与 manifest 一致 | [ ] | 商店后台与 json 人工对照 |
 | 测试账号说明（若审核要求） | [ ] | 准备：已登录百度、公开分享链接 + 提取码 |

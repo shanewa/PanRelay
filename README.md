@@ -28,6 +28,22 @@ Baidu Pan relay save：在百度网盘**分享页**，在你点击「保存到�
 - 在 `pan.baidu.com` / `yun.baidu.com` 播放页对 `video`/`audio` 生效（含 iframe）
 - 弹窗倍速 0.07–16×（步进 0.01）、12 个快捷预设与 ±0.01/±0.1 细调；主世界注入 `speed-main.js` 对抗播放器改回 1×；当前倍速嵌在播放器底栏「流畅」与声音图标之间，样式与「字幕 / 倍速 / 流畅」一致
 
+## 打包（提交商店前）
+
+zip **根目录**直接是 `manifest.json`（不要多包一层 `extension/` 文件夹）。所有脚本与资源均在包内，**不远程加载 JS**（MV3）。
+
+```bash
+make pack
+# 或：node scripts/pack-extension.mjs
+```
+
+输出：`dist/PanRelay-<version>.zip`。仅包含下列路径（与 `scripts/pack-extension.mjs` 白名单一致）：
+
+- 根：`manifest.json`、`background.js`
+- 目录：`assets/`、`content/`、`icons/`、`injected/`、`lib/`、`popup/`、`styles/`
+
+发版前可执行 `make check`（或 `--check-only`）做文件与远程脚本检查。本地验证：`edge://extensions` → 开发者模式 → **加载已解压的** `extension` 目录，确认功能与权限无报错。
+
 ## 安装（Edge 开发者模式）
 
 1. 打开 `edge://extensions/`
