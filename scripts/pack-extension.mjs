@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /**
  * 将 extension/ 打成商店可提交的 zip：压缩包根目录即为 manifest.json（无嵌套 extension/ 文件夹）。
+ * 使用 Node 写入标准 ZIP（PK 头），兼容 Linux unzip / Chrome 商店。
  * 用法：node scripts/pack-extension.mjs [--check-only] [--list-only]
  */
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { deflateRawSync } from 'node:zlib';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -21,6 +22,108 @@ const REMOTE_SCRIPT_RE =
   /<script[^>]+src\s*=\s*["']https?:\/\/[^"']+["']/gi;
 const REMOTE_IMPORT_RE = /\bimport\s*\(\s*["']https?:\/\//;
 const JS_REMOTE_RE = /(?:import\s+[\s\S]*?from\s+|require\s*\(\s*)["']https?:\/\//;
+
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) {
+    c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  }
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function u16(n) {
+  const b = Buffer.alloc(2);
+  b.writeUInt16LE(n, 0);
+  return b;
+}
+
+function u32(n) {
+  const b = Buffer.alloc(4);
+  b.writeUInt32LE(n, 0);
+  return b;
+}
+
+/** @param {{ name: string, data: Buffer }[]} entries */
+function buildZip(entries) {
+  const locals = [];
+  const central = [];
+  let offset = 0;
+
+  for (const { name, data } of entries) {
+    const nameBuf = Buffer.from(name, 'utf8');
+    const crc = crc32(data);
+    const compressed = deflateRawSync(data);
+    const method = 8;
+    const comp = compressed.length < data.length ? compressed : data;
+    const useStore = comp === data;
+    const payload = useStore ? data : compressed;
+    const compMethod = useStore ? 0 : method;
+
+    const localHeader = Buffer.concat([
+      u32(0x04034b50),
+      u16(20),
+      u16(0),
+      u16(compMethod),
+      u16(0),
+      u16(0),
+      u32(crc),
+      u32(payload.length),
+      u32(data.length),
+      u16(nameBuf.length),
+      u16(0),
+      nameBuf,
+    ]);
+    locals.push(localHeader, payload);
+
+    const centralHeader = Buffer.concat([
+      u32(0x02014b50),
+      u16(20),
+      u16(20),
+      u16(0),
+      u16(compMethod),
+      u16(0),
+      u16(0),
+      u32(crc),
+      u32(payload.length),
+      u32(data.length),
+      u16(nameBuf.length),
+      u16(0),
+      u16(0),
+      u16(0),
+      u16(0),
+      u32(0),
+      u32(offset),
+      nameBuf,
+    ]);
+    central.push(centralHeader);
+    offset += localHeader.length + payload.length;
+  }
+
+  const centralBuf = Buffer.concat(central);
+  const eocd = Buffer.concat([
+    u32(0x06054b50),
+    u16(0),
+    u16(0),
+    u16(entries.length),
+    u16(entries.length),
+    u32(centralBuf.length),
+    u32(offset),
+    u16(0),
+  ]);
+  return Buffer.concat([...locals, centralBuf, eocd]);
+}
 
 function readVersion() {
   const manifestPath = path.join(EXT_DIR, 'manifest.json');
@@ -96,41 +199,32 @@ function checkNoRemoteJs() {
   return errors;
 }
 
-function runTarZip(outZip) {
+function writeZip(outZip, relFiles) {
   fs.mkdirSync(DIST_DIR, { recursive: true });
-  if (fs.existsSync(outZip)) fs.unlinkSync(outZip);
-  const relOut = path.relative(ROOT, outZip).replace(/\\/g, '/');
-  const result = spawnSync('tar', ['-a', '-c', '-f', relOut, '-C', 'extension', '.'], {
-    cwd: ROOT,
-    stdio: 'pipe',
-    encoding: 'utf8',
-  });
-  if (result.status !== 0) {
-    const msg = (result.stderr || result.stdout || '').trim();
-    throw new Error(
-      `tar 打包失败（${result.status}）${msg ? `：${msg}` : ''}\n` +
-        'Windows 10+ / macOS / Linux 一般自带 tar；也可在 Git Bash 中执行 make pack。',
-    );
-  }
+  const entries = relFiles.map((name) => ({
+    name,
+    data: fs.readFileSync(path.join(EXT_DIR, name)),
+  }));
+  const buf = buildZip(entries);
+  fs.writeFileSync(outZip, buf);
 }
 
-function verifyZipRoot(outZip) {
-  const list = spawnSync('tar', ['-tf', path.relative(ROOT, outZip).replace(/\\/g, '/')], {
-    cwd: ROOT,
-    encoding: 'utf8',
-  });
-  if (list.status !== 0) {
-    throw new Error('无法列出 zip 内容以校验结构');
+function verifyZipFile(outZip, relFiles) {
+  const buf = fs.readFileSync(outZip);
+  if (buf.length < 4 || buf.readUInt32LE(0) !== 0x04034b50) {
+    throw new Error(
+      '生成的文件不是有效 ZIP（缺少 PK\\x03\\x04 头）。请删除 dist 下旧包后重新 make pack。',
+    );
   }
-  const lines = list.stdout.split(/\r?\n/).filter(Boolean);
-  const hasRootManifest = lines.some(
-    (line) => line === './manifest.json' || line === 'manifest.json',
-  );
-  const nested = lines.some((line) => /^\.\/extension\//.test(line) || /^extension\//.test(line));
-  if (!hasRootManifest) {
-    throw new Error('zip 根目录未找到 manifest.json（可能多包了一层文件夹）');
+  const names = new Set(relFiles);
+  if (!names.has('manifest.json')) {
+    throw new Error('白名单缺少 manifest.json');
   }
-  if (nested) {
+  const text = buf.toString('binary');
+  if (!text.includes('manifest.json')) {
+    throw new Error('zip 内未找到 manifest.json 条目');
+  }
+  if (/\bextension\/manifest\.json/.test(text)) {
     throw new Error('zip 内含有 extension/ 前缀，商店要求根目录直接为 manifest.json');
   }
 }
@@ -164,11 +258,12 @@ function main() {
   }
 
   const outZip = path.join(DIST_DIR, `PanRelay-${version}.zip`);
-  runTarZip(outZip);
-  verifyZipRoot(outZip);
+  writeZip(outZip, files);
+  verifyZipFile(outZip, files);
   const sizeKb = Math.round(fs.statSync(outZip).size / 1024);
-  console.log(`已生成 ${path.relative(ROOT, outZip)}（约 ${sizeKb} KiB）`);
-  console.log('本地测试：edge://extensions → 开发者模式 → 加载已解压的 extension 目录，或拖入本 zip（部分浏览器仅支持解压加载）。');
+  console.log(`已生成 ${path.relative(ROOT, outZip)}（约 ${sizeKb} KiB，标准 ZIP）`);
+  console.log('校验：文件头 PK\\x03\\x04；可用 unzip -t 测试。');
+  console.log('本地测试：edge://extensions → 开发者模式 → 加载已解压的 extension 目录。');
 }
 
 main();

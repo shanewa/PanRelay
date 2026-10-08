@@ -37,7 +37,7 @@ make pack
 # 或：node scripts/pack-extension.mjs
 ```
 
-输出：`dist/PanRelay-<version>.zip`。仅包含下列路径（与 `scripts/pack-extension.mjs` 白名单一致）：
+输出：`dist/PanRelay-<version>.zip`（Node 生成的标准 ZIP，`PK` 头，可用 `unzip -t` 校验）。仅包含下列路径（与 `scripts/pack-extension.mjs` 白名单一致）：
 
 - 根：`manifest.json`、`background.js`
 - 目录：`assets/`、`content/`、`icons/`、`injected/`、`lib/`、`popup/`、`styles/`
