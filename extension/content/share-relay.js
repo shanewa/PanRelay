@@ -98,6 +98,16 @@
     return false;
   }
 
+  function readBdclndSekey() {
+    try {
+      const match = document.cookie.match(/(?:^|;\s*)BDCLND=([^;]*)/);
+      if (!match) return '';
+      return decodeURIComponent(match[1].replace(/\+/g, ' '));
+    } catch (_) {
+      return '';
+    }
+  }
+
   async function runRelay(selected) {
     const meta = await callBridge('getShareMeta');
     if (meta.loginstate !== '1' && meta.loginstate !== 1) {
@@ -109,6 +119,7 @@
       userId: meta.userId,
       bdstoken: meta.bdstoken,
       shareRoot: meta.shareRoot,
+      sekey: meta.sekey || readBdclndSekey(),
       batchSize: settings.batchSize,
       transferCooldownMs: settings.transferCooldownMs,
       onProgress: (msg) => {

@@ -59,11 +59,18 @@
     const first = fileList[0] || {};
     const parentPath = decodePath(first.parent_path || '/');
 
+    const sekey =
+      y.sign ||
+      y.data?.sign ||
+      get('sign') ||
+      get('sekey') ||
+      '';
     return {
       shareId: String(y.shareid || get('shareid') || ''),
       userId: String(y.share_uk || get('share_uk') || ''),
       bdstoken: String(y.bdstoken || get('bdstoken') || ''),
       shareRoot: parentPath || '/',
+      sekey: String(sekey || ''),
       loginstate: String(y.loginstate || get('loginstate') || '0'),
     };
   }

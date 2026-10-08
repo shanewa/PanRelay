@@ -51,10 +51,30 @@
 
   function isRetriableShareError(error) {
     if (!error) return false;
+    const errno = Number(error.errno);
+    // errno 2 等多为「链接出错/参数错误」，重试无效
+    if (errno === 2 || errno === -7 || errno === 105 || errno === 116) return false;
     const msg = String(error.message || '');
     if (/超时|timeout|繁忙|稍后再试|系统|网络/i.test(msg)) return true;
-    const errno = Number(error.errno);
-    return errno === 111 || errno === 1504 || errno === -1 || errno === 2;
+    return errno === 111 || errno === 1504 || errno === -1;
+  }
+
+  /** 分享侧列举用的目录路径（勿与用户网盘保存路径混淆） */
+  function normalizeShareListPath(sharePath, shareDirRaw, shareRoot) {
+    let decoded =
+      sharePath != null && sharePath !== ''
+        ? String(sharePath)
+        : decodePath(shareDirRaw);
+    decoded = decoded.trim();
+    if (decoded && !decoded.startsWith('/') && /^sharelink/i.test(decoded)) {
+      decoded = `/${decoded}`;
+    }
+    const root = shareRoot != null ? String(shareRoot).replace(/\/$/, '') : '';
+    if (decoded && root && !decoded.includes('sharelink') && !decoded.startsWith(root)) {
+      decoded = joinPath(root, decoded.replace(/^\//, ''));
+    }
+    if (!decoded && root) decoded = root;
+    return decoded || '/';
   }
 
   function mapShareListItem(item) {
@@ -81,6 +101,7 @@
       this.userId = options.userId;
       this.bdstoken = options.bdstoken;
       this.shareRoot = options.shareRoot || '/';
+      this.sekey = options.sekey || '';
       /** @type {string} 用户选择的转存根目录（网盘路径） */
       this.destinationRoot = options.destinationRoot || '/';
     }
@@ -233,9 +254,10 @@
       }
     }
 
-    shareListQuery(page, dirValue, pageSize) {
+    shareListQuery(page, dirValue, pageSize, listOptions = {}) {
       const num = pageSize || this.listPageSize;
-      return [
+      const { fid, dirEncoding = 'segment' } = listOptions;
+      const parts = [
         `uk=${encodeURIComponent(this.userId)}`,
         `shareid=${encodeURIComponent(this.shareId)}`,
         'web=1',
@@ -247,32 +269,103 @@
         'showempty=0',
         `page=${page}`,
         `num=${num}`,
-        `dir=${dirValue}`,
         `bdstoken=${encodeURIComponent(this.bdstoken)}`,
-      ].join('&');
+      ];
+      if (this.sekey) {
+        parts.push(`sekey=${encodeURIComponent(this.sekey)}`);
+      }
+      if (fid) {
+        parts.push(`fid=${encodeURIComponent(String(fid))}`);
+        parts.push('root=0');
+        if (dirValue) parts.push(`dir=${dirValue}`);
+      } else {
+        const hasSubDir =
+          dirValue &&
+          dirValue !== '/' &&
+          String(dirValue).length > 0;
+        parts.push(`root=${hasSubDir ? 0 : 1}`);
+        if (hasSubDir) {
+          parts.push(`dir=${dirValue}`);
+        }
+      }
+      return parts.join('&');
     }
 
-    async fetchShareListPage(sharePath, page, shareDirRaw) {
+    buildShareListDirVariants(sharePath, shareDirRaw) {
+      const normalized = normalizeShareListPath(sharePath, shareDirRaw, this.shareRoot);
+      const fromRaw = dirQueryValue(shareDirRaw, normalized);
+      const fullEncoded = encodeURIComponent(normalized);
+      const segmentEncoded = encodePath(normalized);
+      const variants = [];
+      const push = (value, encoding) => {
+        if (!value || value === '/') return;
+        const key = `${encoding}:${value}`;
+        if (variants.some((v) => v.key === key)) return;
+        variants.push({ key, value, encoding });
+      };
+      push(fromRaw, 'raw');
+      push(segmentEncoded, 'segment');
+      push(fullEncoded, 'full');
+      if (normalized !== sharePath) {
+        push(dirQueryValue(shareDirRaw, sharePath), 'raw-alt');
+      }
+      return { normalized, variants };
+    }
+
+    formatShareListError(error) {
+      const errno = error?.errno;
+      const base = error?.message || String(error);
+      if (errno != null && errno !== '') {
+        return `${base}（errno=${errno}）`;
+      }
+      return base;
+    }
+
+    async fetchShareListPage(sharePath, page, shareDirRaw, fid) {
       await this.ensureBdstoken();
+      const { normalized, variants } = this.buildShareListDirVariants(sharePath, shareDirRaw);
       let lastError;
+      const tryPlans = [];
+      if (fid) {
+        for (const v of variants) {
+          tryPlans.push({ fid, dirValue: v.value, encoding: `fid+${v.encoding}` });
+        }
+        tryPlans.push({ fid, dirValue: '', encoding: 'fid-only' });
+      }
+      for (const v of variants) {
+        tryPlans.push({ fid: null, dirValue: v.value, encoding: v.encoding });
+      }
+
       for (let attempt = 0; attempt < this.listMaxRetries; attempt += 1) {
         const pageSize = attempt >= 2 ? Math.min(25, this.listPageSize) : this.listPageSize;
-        const dirValue = dirQueryValue(shareDirRaw, sharePath);
+        const plan = tryPlans[Math.min(attempt, tryPlans.length - 1)] || tryPlans[0];
         try {
           const data = await this.request('/share/list', {
-            query: this.shareListQuery(page, dirValue, pageSize),
+            query: this.shareListQuery(page, plan.dirValue, pageSize, {
+              fid: plan.fid,
+              dirEncoding: plan.encoding,
+            }),
             checkErrno: true,
           });
           const list = Array.isArray(data.list) ? data.list : [];
           return { items: list.map(mapShareListItem), pageSize };
         } catch (error) {
           lastError = error;
-          if (!isRetriableShareError(error) || attempt >= this.listMaxRetries - 1) {
-            throw error;
+          if (!isRetriableShareError(error)) {
+            throw new PanRelayError(
+              `列举分享目录失败：${this.formatShareListError(error)}（路径：${normalized}）`,
+              { errno: error.errno, response: error.response },
+            );
+          }
+          if (attempt >= this.listMaxRetries - 1) {
+            throw new PanRelayError(
+              `列举分享目录失败：${this.formatShareListError(error)}（路径：${normalized}）`,
+              { errno: error.errno, response: error.response },
+            );
           }
           const delay = Math.min(30000, 3000 * (attempt + 1));
           this.progress(
-            `列举分享目录超时或繁忙，${Math.ceil(delay / 1000)} 秒后重试（${attempt + 1}/${this.listMaxRetries}）…`,
+            `列举分享目录超时或繁忙，${Math.ceil(delay / 1000)} 秒后重试（${attempt + 1}/${this.listMaxRetries}，${plan.encoding}）…`,
           );
           await sleep(delay);
         }
@@ -283,14 +376,16 @@
     /**
      * 分页列举并立刻转存，避免超大目录单次 list 拖垮接口。
      */
-    async processShareDirectoryIncrementally(sourcePath, childDestination, shareDirRaw) {
+    async processShareDirectoryIncrementally(sourcePath, childDestination, shareDirRaw, fid) {
       await this.createDirectory(childDestination);
+      await sleep(Math.max(800, Math.min(2000, this.transferCooldownMs)));
       for (let page = 1; ; page += 1) {
         this.progress(`读取分享目录第 ${page} 页：${sourcePath}`);
         const { items: batch, pageSize } = await this.fetchShareListPage(
           sourcePath,
           page,
           shareDirRaw,
+          fid,
         );
         if (!batch.length) break;
 
@@ -338,16 +433,18 @@
           return;
         }
         const directory = directories[0];
-        const relativeDest = destination.slice(this.destinationRoot.length);
-        const sourcePath =
-          directory.sharePath ||
-          joinPath(this.shareRoot, relativeDest, directory.name);
+        const sourcePath = normalizeShareListPath(
+          directory.sharePath,
+          directory.shareDirRaw,
+          this.shareRoot,
+        );
         this.progress(`列出分享目录：${sourcePath}`);
         const childDestination = joinPath(destination, directory.name);
         await this.processShareDirectoryIncrementally(
           sourcePath,
           childDestination,
           directory.shareDirRaw,
+          directory.id,
         );
       }
     }
