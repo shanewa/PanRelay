@@ -14,7 +14,7 @@
 | 约束 | 设计选择 |
 |------|----------|
 | Manifest V3 内容脚本默认跑在 **isolated world**，读不到页面的 `require` / `yunData` | 转存用 `web_accessible_resources` 注入 `page-bridge.js` 到 **MAIN**；倍速用 `world: "MAIN"` 注入 `speed-main.js` |
-| Isolated 与 MAIN 之间 `CustomEvent` **不能**直接互通 | 倍速配置走 `localStorage` + **注入一小段页面脚本** 再 `dispatchEvent` |
+| Isolated 与 MAIN 之间 `CustomEvent` **不能**直接互通 | 倍速配置走 `localStorage` + `window.postMessage`（页面 CSP 禁止内联 script） |
 | 网页端单次转存有数量上限（errno `12`） | 先整目录转存，失败再二分拆分，再分页 `share/list` 后逐页转存 |
 | 全页 `MutationObserver` + `all_frames` 会拖死网盘 SPA | 倍速用定时器 + 媒体事件；HUD 只插播放器底栏，不扫整棵 DOM |
 | 关注引导不能一打开网盘就挡页面 | 只在 **点扩展图标** 或 **点「保存到网盘」** 时出卡片 |

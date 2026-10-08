@@ -1,6 +1,6 @@
 /**
  * 页面主世界：应用倍速（与网盘播放器同一 JS 环境）。
- * 配置经 localStorage + 主世界 CustomEvent 同步（含同源 iframe）。
+ * 配置经 localStorage + postMessage / CustomEvent 同步（含同源 iframe）。
  */
 (function () {
   'use strict';
@@ -9,6 +9,7 @@
   window.__panRelaySpeedMain = true;
 
   const STORAGE_KEY = '__panrelay_speed__';
+  const SPEED_MSG = 'panrelay-speed-config';
   const MIN_SPEED = 0.07;
   const MAX_SPEED = 16;
 
@@ -119,6 +120,14 @@
     },
     false,
   );
+
+  window.addEventListener('message', (event) => {
+    if (event.source !== window) return;
+    const data = event.data;
+    if (!data || data.type !== SPEED_MSG || data.source !== 'panrelay-speed-isolated') return;
+    mergeConfig(data.detail || {});
+    applyAll();
+  });
 
   window.addEventListener('storage', (event) => {
     if (event.key === STORAGE_KEY) scheduleApply();

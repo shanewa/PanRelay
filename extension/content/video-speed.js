@@ -7,6 +7,7 @@
   const { conformSpeed, formatSpeed } = PanRelayMediaSpeed;
 
   const STORAGE_KEY = '__panrelay_speed__';
+  const SPEED_MSG = 'panrelay-speed-config';
 
   const DEFAULTS = {
     videoSpeedEnabled: true,
@@ -27,13 +28,16 @@
     };
   }
 
-  /** isolated world 的 CustomEvent 主世界收不到，须注入脚本派发 */
+  /** isolated → MAIN：postMessage（页面 CSP 禁止内联 script） */
   function pushConfigToPage(detail) {
-    const payload = JSON.stringify(detail).replace(/</g, '\\u003c');
-    const el = document.createElement('script');
-    el.textContent = `document.dispatchEvent(new CustomEvent('panrelay-speed-config',{detail:${payload}}));`;
-    (document.documentElement || document.head || document.body).appendChild(el);
-    el.remove();
+    try {
+      window.postMessage(
+        { source: 'panrelay-speed-isolated', type: SPEED_MSG, detail },
+        window.location.origin,
+      );
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   function pushConfig() {
