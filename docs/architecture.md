@@ -184,7 +184,7 @@ errno **`12`**：单次数量超限，向上抛给拆分逻辑。
 
 #### 分页列举：`fetchShareListPage` / `processShareDirectoryIncrementally`
 
-`GET /share/list`，query 由 `shareListQuery(page, dirValue, pageSize)` 组装。
+`GET /share/list`，query 由 `shareListQuery(page, dirValue, pageSize, { fid })` 组装。子目录列举带 `root=0`（根层为 `root=1`）；有 `fs_id` 时优先 `fid=`，并附带 `sekey`（`BDCLND` / 页面 `sign`）。`errno 2`（链接出错）不重试。
 
 `dirQueryValue(shareDirRaw, sharePath)`：
 
