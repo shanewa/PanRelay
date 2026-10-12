@@ -10,6 +10,7 @@ const DEFAULTS = {
   videoSpeedEnabled: true,
   videoSpeed: 1,
   preservePitch: true,
+  noteMdExportEnabled: true,
   [STORAGE_KEY]: false,
 };
 
@@ -22,6 +23,7 @@ const videoSpeedEnabledEl = document.getElementById('videoSpeedEnabled');
 const videoSpeedEl = document.getElementById('videoSpeed');
 const speedLabelEl = document.getElementById('speedLabel');
 const preservePitchEl = document.getElementById('preservePitch');
+const noteMdExportEnabledEl = document.getElementById('noteMdExportEnabled');
 const speedPresetsEl = document.getElementById('speedPresets');
 const speedStepRowEl = document.getElementById('speedStepRow');
 const unlockGateEl = document.getElementById('unlockGate');
@@ -122,6 +124,7 @@ chrome.storage.sync.get(DEFAULTS, (stored) => {
   videoSpeedEnabledEl.checked = stored.videoSpeedEnabled !== false;
   videoSpeedEl.value = stored.videoSpeed ?? 1;
   preservePitchEl.checked = stored.preservePitch !== false;
+  noteMdExportEnabledEl.checked = stored.noteMdExportEnabled !== false;
   updateLabels();
   renderUnlockState(isUnlocked(stored));
 });
@@ -145,6 +148,7 @@ function save() {
     videoSpeedEnabled: videoSpeedEnabledEl.checked,
     videoSpeed,
     preservePitch: preservePitchEl.checked,
+    noteMdExportEnabled: noteMdExportEnabledEl.checked,
   });
 }
 
@@ -161,6 +165,7 @@ videoSpeedEl.addEventListener('input', () => {
   save();
 });
 preservePitchEl.addEventListener('change', save);
+noteMdExportEnabledEl.addEventListener('change', save);
 unlockBtnEl.addEventListener('click', submitUnlock);
 unlockCodeEl.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') submitUnlock();

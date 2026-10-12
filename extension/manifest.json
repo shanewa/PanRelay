@@ -46,6 +46,15 @@
       "all_frames": true
     },
     {
+      "matches": [
+        "https://pan.baidu.com/fcb/videoedit*",
+        "https://yun.baidu.com/fcb/videoedit*"
+      ],
+      "js": ["content/note-md.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
       "matches": ["https://pan.baidu.com/*", "https://yun.baidu.com/*"],
       "js": ["lib/media-speed.js", "content/video-speed.js"],
       "css": ["styles/video-speed-hud.css"],
