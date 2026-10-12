@@ -1,5 +1,11 @@
-const { conformSpeed, SPEED_PRESETS, SPEED_SMALL_STEP, SPEED_BIG_STEP } =
-  PanRelayMediaSpeed;
+const {
+  conformSpeed,
+  MIN_SPEED,
+  MAX_SPEED,
+  SPEED_PRESETS,
+  SPEED_SMALL_STEP,
+  SPEED_BIG_STEP,
+} = PanRelayMediaSpeed;
 const { KEYWORD, STORAGE_KEY, verifyUnlockInput, isUnlocked } = PanRelayUnlock;
 
 const DEFAULTS = {
@@ -68,17 +74,34 @@ function clampSpeed(v) {
   return conformSpeed(v);
 }
 
+// 滑杆位置 0～1000 到倍速的映射：500 对准 1x，两侧各走一段指数，
+// 常用区间占一半行程，16x 那头再大也只占一半。
+function posToSpeed(pos) {
+  const p = Math.min(1000, Math.max(0, Math.round(Number(pos) || 0)));
+  const speed =
+    p >= 500
+      ? Math.pow(MAX_SPEED, (p - 500) / 500)
+      : MIN_SPEED * Math.pow(1 / MIN_SPEED, p / 500);
+  return conformSpeed(speed);
+}
+
+function speedToPos(speed) {
+  const s = conformSpeed(speed);
+  if (s >= 1) return Math.round(500 + (500 * Math.log(s)) / Math.log(MAX_SPEED));
+  return Math.round(500 * (1 - Math.log(s) / Math.log(MIN_SPEED)));
+}
+
 function formatSpeedLabel(speed) {
   return Number(speed).toFixed(2);
 }
 
 function updateLabels() {
   cooldownLabelEl.textContent = String(transferCooldownMsEl.value);
-  const speed = clampSpeed(videoSpeedEl.value);
+  const speed = posToSpeed(videoSpeedEl.value);
   speedLabelEl.textContent = formatSpeedLabel(speed);
   speedPresetsEl.querySelectorAll('button[data-speed]').forEach((btn) => {
     const preset = Number(btn.dataset.speed);
-    btn.classList.toggle('active', Math.abs(speed - preset) < 0.001);
+    btn.classList.toggle('active', Math.abs(speed - preset) < 0.005);
   });
 }
 
@@ -88,7 +111,7 @@ SPEED_PRESETS.forEach((p) => {
   btn.dataset.speed = String(p);
   btn.textContent = p.toFixed(2);
   btn.addEventListener('click', () => {
-    videoSpeedEl.value = String(p);
+    videoSpeedEl.value = String(speedToPos(p));
     updateLabels();
     save();
   });
@@ -96,7 +119,8 @@ SPEED_PRESETS.forEach((p) => {
 });
 
 function addSpeedDelta(delta) {
-  videoSpeedEl.value = String(clampSpeed(Number(videoSpeedEl.value) + delta));
+  const next = clampSpeed(posToSpeed(videoSpeedEl.value) + delta);
+  videoSpeedEl.value = String(speedToPos(next));
   updateLabels();
   save();
 }
@@ -120,7 +144,7 @@ chrome.storage.sync.get(DEFAULTS, (stored) => {
   alwaysRelayEl.checked = !!stored.alwaysRelay;
   transferCooldownMsEl.value = stored.transferCooldownMs || 1500;
   videoSpeedEnabledEl.checked = stored.videoSpeedEnabled !== false;
-  videoSpeedEl.value = stored.videoSpeed ?? 1;
+  videoSpeedEl.value = String(speedToPos(stored.videoSpeed ?? 1));
   preservePitchEl.checked = stored.preservePitch !== false;
   noteMdExportEnabledEl.checked = stored.noteMdExportEnabled !== false;
   updateLabels();
@@ -135,8 +159,8 @@ function save() {
     Math.max(800, Number(transferCooldownMsEl.value) || 1500),
   );
   transferCooldownMsEl.value = transferCooldownMs;
-  const videoSpeed = clampSpeed(videoSpeedEl.value);
-  videoSpeedEl.value = videoSpeed;
+  const videoSpeed = posToSpeed(videoSpeedEl.value);
+  videoSpeedEl.value = String(speedToPos(videoSpeed));
   updateLabels();
   chrome.storage.sync.set({
     enabled: enabledEl.checked,
