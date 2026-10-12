@@ -236,7 +236,7 @@ input[type='range'] {
   align-items: baseline;
   justify-content: center;
   gap: 2px;
-  margin: 2px 0 6px;
+  margin: 6px 0 10px;
   font-family: var(--num);
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -276,14 +276,14 @@ input[type='range'] {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 4px;
-  margin: 8px 0 6px;
+  margin: 10px 0 4px;
 }
 
 .presets {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 4px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin: 6px 0 10px;
 }
 
 .speed-steps button,
@@ -301,10 +301,16 @@ input[type='range'] {
 
 .speed-steps button {
   color: var(--slate);
-  background: #fff;
+  background: transparent;
+  border-color: transparent;
 }
 
-.speed-steps button:hover,
+.speed-steps button:hover {
+  border-color: transparent;
+  background: var(--ice);
+  color: var(--sky-deep);
+}
+
 .presets button:hover {
   border-color: var(--sky);
   color: var(--sky-deep);
