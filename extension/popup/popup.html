@@ -15,83 +15,90 @@
     <section id="unlockGate" class="unlock-gate" hidden>
       <h2>关注公众号解锁</h2>
       <p class="hint">插件完全免费。请先关注公众号，这样你在使用中遇到问题可以直接给作者发消息，方便我们改进。</p>
-      <ol class="unlock-steps">
-        <li>微信扫码关注公众号</li>
-        <li>发送 <strong id="unlockKeyword">百度网盘插件</strong></li>
-        <li>把回复里的 <strong>6 位数字</strong> 填到下方</li>
-      </ol>
-      <img
-        class="oa-qr"
-        id="oaQr"
-        src="../assets/wechat-oa-qr.jpg"
-        alt="公众号二维码"
-        title="点击放大"
-      />
-      <p class="hint small">用微信扫一扫；也可把二维码保存后扫码。</p>
-      <label class="row col">
-        <span>解锁码</span>
-        <input
-          type="text"
-          id="unlockCode"
-          inputmode="numeric"
-          maxlength="12"
-          placeholder="6 位数字"
-          autocomplete="off"
+      <div class="unlock-qr-col">
+        <img
+          class="oa-qr"
+          id="oaQr"
+          src="../assets/wechat-oa-qr.jpg"
+          alt="公众号二维码"
+          title="点击放大"
         />
-      </label>
-      <button type="button" class="unlock-btn" id="unlockBtn">解锁</button>
-      <p class="unlock-msg" id="unlockMsg" hidden></p>
+        <p class="hint small">用微信扫一扫；也可保存二维码后扫码。</p>
+      </div>
+      <div class="unlock-form-col">
+        <ol class="unlock-steps">
+          <li>微信扫码关注公众号</li>
+          <li>发送 <strong id="unlockKeyword">百度网盘插件</strong></li>
+          <li>把回复里的 <strong>6 位数字</strong> 填到下方</li>
+        </ol>
+        <label class="row col">
+          <span>解锁码</span>
+          <input
+            type="text"
+            id="unlockCode"
+            inputmode="numeric"
+            maxlength="12"
+            placeholder="6 位数字"
+            autocomplete="off"
+          />
+        </label>
+        <button type="button" class="unlock-btn" id="unlockBtn">解锁</button>
+        <p class="unlock-msg" id="unlockMsg" hidden></p>
+      </div>
     </section>
 
-    <div id="settingsRoot">
-    <section>
-      <h2>接力转存</h2>
-      <label class="row">
-        <input type="checkbox" id="enabled" />
-        <span>启用接力转存</span>
-      </label>
-      <label class="row">
-        <span>每批文件数</span>
-        <input type="number" id="batchSize" min="50" max="500" step="50" />
-      </label>
-      <label class="row">
-        <input type="checkbox" id="alwaysRelay" />
-        <span>始终走接力（含小批量）</span>
-      </label>
-      <label class="row col">
-        <span>转存间隔 <strong id="cooldownLabel">1500</strong> ms</span>
-        <input type="range" id="transferCooldownMs" min="800" max="6000" step="100" />
-      </label>
-      <p class="hint small">间隔越大越不易触发百度「请求过快/超时」，整体更慢。</p>
-    </section>
+    <div id="settingsRoot" class="settings">
+      <div class="settings-col">
+        <section>
+          <h2>接力转存</h2>
+          <label class="row">
+            <input type="checkbox" id="enabled" />
+            <span>启用接力转存</span>
+          </label>
+          <label class="row">
+            <span>每批文件数</span>
+            <input type="number" id="batchSize" min="50" max="500" step="50" />
+          </label>
+          <label class="row">
+            <input type="checkbox" id="alwaysRelay" />
+            <span>始终走接力（含小批量）</span>
+          </label>
+          <label class="row col">
+            <span>转存间隔 <strong id="cooldownLabel">1500</strong> ms</span>
+            <input type="range" id="transferCooldownMs" min="800" max="6000" step="100" />
+          </label>
+          <p class="hint small">间隔越大越不易触发「请求过快/超时」，整体更慢。免费账号单次约 500 个文件。</p>
+        </section>
 
-    <section>
-      <h2>视频倍速</h2>
-      <label class="row">
-        <input type="checkbox" id="videoSpeedEnabled" />
-        <span>启用倍速（网盘预览/播放页）</span>
-      </label>
-      <label class="row col">
-        <span>速度 <strong id="speedLabel">1.0</strong>×</span>
-        <input type="range" id="videoSpeed" min="0.07" max="16" step="0.01" />
-      </label>
-      <div class="speed-steps" id="speedStepRow" title="细调步进 0.01 / 0.1"></div>
-      <div class="presets" id="speedPresets"></div>
-      <label class="row">
-        <input type="checkbox" id="preservePitch" checked />
-        <span>保持音调（preservesPitch）</span>
-      </label>
-    </section>
+        <section>
+          <h2>图文笔记</h2>
+          <label class="row">
+            <input type="checkbox" id="noteMdExportEnabled" checked />
+            <span>显示「下载MD」</span>
+          </label>
+          <p class="hint small">播放页笔记工具栏「分享」后出现，把 AI 图文笔记导出为 Markdown，文件名以视频名开头。</p>
+        </section>
+      </div>
 
-    <section>
-      <h2>图文笔记</h2>
-      <label class="row">
-        <input type="checkbox" id="noteMdExportEnabled" checked />
-        <span>显示「下载MD」</span>
-      </label>
-      <p class="hint small">播放页笔记工具栏「分享」后面出现按钮，把「以下为AI生成的图文笔记的内容」及其后正文导出为 Markdown。默认打开。</p>
-    </section>
-
+      <div class="settings-col">
+        <section>
+          <h2>视频倍速</h2>
+          <label class="row">
+            <input type="checkbox" id="videoSpeedEnabled" />
+            <span>启用倍速（网盘预览/播放页）</span>
+          </label>
+          <label class="row col">
+            <span>速度 <strong id="speedLabel">1.0</strong>×</span>
+            <input type="range" id="videoSpeed" min="0.07" max="16" step="0.01" />
+          </label>
+          <div class="speed-steps" id="speedStepRow" title="细调步进 0.01 / 0.1"></div>
+          <div class="presets" id="speedPresets"></div>
+          <label class="row">
+            <input type="checkbox" id="preservePitch" checked />
+            <span>保持音调（preservesPitch）</span>
+          </label>
+        </section>
+      </div>
     </div>
     <script src="../lib/unlock.js"></script>
     <script src="../lib/media-speed.js"></script>

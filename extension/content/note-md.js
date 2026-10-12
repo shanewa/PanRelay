@@ -107,10 +107,36 @@
     }, 1600);
   }
 
+  function safeName(text) {
+    return String(text || '').replace(/[\\/:*?"<>|]/g, '_').trim();
+  }
+
+  function stripExt(name) {
+    return name.replace(/\.(mp4|mkv|avi|mov|flv|wmv|m4v|ts|webm|rmvb|rm|3gp|mpg|mpeg)$/i, '');
+  }
+
+  /** 笔记 iframe 与播放页同源，优先读外层正在播放的选集名 */
+  function videoName() {
+    try {
+      const doc = window.parent?.document;
+      const playing =
+        doc?.querySelector('.vp-video-page-card__video-name.is-playing') ||
+        doc?.querySelector('.is-playing .vp-video-page-card__video-name');
+      const text = playing?.textContent?.trim();
+      if (text) return stripExt(text);
+    } catch (_) {
+      /* 跨域时读不到外层 */
+    }
+    const notePath = new URLSearchParams(location.search).get('path') || '';
+    const base = notePath.split('/').pop() || '';
+    return stripExt(base.replace(/\.fcb$/i, '').replace(/_笔记$/, ''));
+  }
+
   function filename() {
-    const title = document.querySelector('.note-doc-editor-title')?.value?.trim();
-    const base = (title || '图文笔记').replace(/[\\/:*?"<>|]/g, '_').slice(0, 80);
-    return `${base || '图文笔记'}.md`;
+    const video = safeName(videoName());
+    const title = safeName(document.querySelector('.note-doc-editor-title')?.value) || '图文笔记';
+    const name = !video || title.startsWith(video) ? title : `${video}_${title}`;
+    return `${name.slice(0, 120)}.md`;
   }
 
   function buildMarkdown() {
