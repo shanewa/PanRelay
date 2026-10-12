@@ -409,6 +409,34 @@ input[type='range'] {
   color: #0f7a55;
 }
 
+/* ---------- relay card ---------- */
+
+.relay-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.relay-card .card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.relay-card .field {
+  min-height: 30px;
+  margin-bottom: 8px;
+}
+
+.relay-card #batchSize {
+  padding: 5px 8px;
+  font-size: 15px;
+}
+
+.relay-card .hint {
+  margin-top: 8px;
+}
+
 /* ---------- note strip ---------- */
 
 .note-strip {
