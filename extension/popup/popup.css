@@ -397,6 +397,73 @@ input[type='range'] {
   color: #0f7a55;
 }
 
+/* ---------- footer + contact ---------- */
+
+.foot {
+  margin: 10px 2px 0;
+  text-align: center;
+}
+
+.linklike {
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--sky-deep);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.linklike:hover {
+  text-decoration: underline;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(11, 42, 74, 0.45);
+}
+
+.overlay-card {
+  position: relative;
+  width: 232px;
+  box-sizing: border-box;
+  padding: 14px 16px 12px;
+  text-align: center;
+  background: #fff;
+  border-radius: 12px;
+}
+
+.overlay-card .oa-qr {
+  width: 200px;
+  height: 200px;
+  margin: 8px auto 0;
+  cursor: default;
+}
+
+.overlay-close {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  padding: 2px 6px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--slate);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.overlay-close:hover {
+  color: var(--ink);
+  background: var(--ice);
+}
+
 /* ---------- a11y ---------- */
 
 :focus-visible {

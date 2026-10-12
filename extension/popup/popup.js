@@ -171,3 +171,21 @@ unlockCodeEl.addEventListener('keydown', (event) => {
 oaQrEl.addEventListener('click', () => {
   window.open(oaQrEl.src, '_blank');
 });
+
+const contactLinkEl = document.getElementById('contactLink');
+const contactOverlayEl = document.getElementById('contactOverlay');
+const contactCloseEl = document.getElementById('contactClose');
+
+function setContactOpen(open) {
+  contactOverlayEl.hidden = !open;
+  (open ? contactCloseEl : contactLinkEl).focus();
+}
+
+contactLinkEl.addEventListener('click', () => setContactOpen(true));
+contactCloseEl.addEventListener('click', () => setContactOpen(false));
+contactOverlayEl.addEventListener('click', (event) => {
+  if (event.target === contactOverlayEl) setContactOpen(false);
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !contactOverlayEl.hidden) setContactOpen(false);
+});
