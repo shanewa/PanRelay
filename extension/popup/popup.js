@@ -1,4 +1,4 @@
-const { conformSpeed, formatSpeed, SPEED_PRESETS, SPEED_SMALL_STEP, SPEED_BIG_STEP } =
+const { conformSpeed, SPEED_PRESETS, SPEED_SMALL_STEP, SPEED_BIG_STEP } =
   PanRelayMediaSpeed;
 const { KEYWORD, STORAGE_KEY, verifyUnlockInput, isUnlocked } = PanRelayUnlock;
 
@@ -69,9 +69,7 @@ function clampSpeed(v) {
 }
 
 function formatSpeedLabel(speed) {
-  const fixed = formatSpeed(speed);
-  if (fixed.includes('.')) return fixed;
-  return `${fixed}.0`;
+  return Number(speed).toFixed(2);
 }
 
 function updateLabels() {
