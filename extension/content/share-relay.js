@@ -130,16 +130,26 @@
     await engine.runSelection(selected, destination);
   }
 
+  function blockEvent(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+  }
+
   async function onSaveClick(event) {
-    if (!settings.enabled || running) return;
+    if (!settings.enabled) return;
     if (!settings.unlocked) {
       PanRelayUnlockGuide.showGuide({ force: true });
       return;
     }
 
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
+    blockEvent(event);
+
+    if (running) {
+      ensurePanel();
+      appendLog('接力转存进行中，请等待完成后再点保存');
+      return;
+    }
 
     let selected;
     try {
@@ -176,11 +186,19 @@
     }
   }
 
-  document.addEventListener(
+  function findSaveTarget(node) {
+    if (!node?.closest) return null;
+    const direct = node.closest(SAVE_SELECTOR);
+    if (direct) return direct;
+    const menuItem = node.closest('.g-button-menu');
+    if (menuItem && menuItem.textContent.trim() === '保存到网盘') return menuItem;
+    return null;
+  }
+
+  window.addEventListener(
     'click',
     (event) => {
-      const target = event.target.closest?.(SAVE_SELECTOR);
-      if (!target) return;
+      if (!findSaveTarget(event.target)) return;
       onSaveClick(event);
     },
     true,
