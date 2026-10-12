@@ -204,5 +204,19 @@
     true,
   );
 
+  // 百度按钮组件可能在 mousedown/mouseup 上触发保存，早于 click
+  ['pointerdown', 'mousedown', 'pointerup', 'mouseup'].forEach((type) => {
+    window.addEventListener(
+      type,
+      (event) => {
+        if (!settings.enabled || !settings.unlocked) return;
+        if (!findSaveTarget(event.target)) return;
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+      },
+      true,
+    );
+  });
+
   injectBridge();
 })();
