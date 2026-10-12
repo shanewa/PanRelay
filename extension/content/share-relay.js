@@ -16,6 +16,7 @@
   let settings = { ...DEFAULTS };
   let running = false;
   let panelEl = null;
+  let currentEngine = null;
 
   chrome.storage.sync.get(DEFAULTS, (stored) => {
     settings = { ...DEFAULTS, ...stored };
@@ -66,12 +67,32 @@
     panelEl.id = 'panrelay-panel';
     panelEl.innerHTML =
       '<div class="panrelay-panel-inner">' +
+      '<div class="panrelay-header">' +
       '<div class="panrelay-title">PanRelay 接力转存</div>' +
+      '<button type="button" class="panrelay-cancel" hidden>取消</button>' +
+      '</div>' +
       '<div class="panrelay-status">就绪</div>' +
       '<div class="panrelay-log"></div>' +
       '</div>';
+    panelEl.querySelector('.panrelay-cancel').addEventListener('click', onCancelClick);
     document.documentElement.appendChild(panelEl);
     return panelEl;
+  }
+
+  function setCancelVisible(visible) {
+    const btn = ensurePanel().querySelector('.panrelay-cancel');
+    btn.hidden = !visible;
+    btn.disabled = false;
+    btn.textContent = '取消';
+  }
+
+  function onCancelClick() {
+    if (!currentEngine) return;
+    currentEngine.cancel();
+    const btn = ensurePanel().querySelector('.panrelay-cancel');
+    btn.disabled = true;
+    btn.textContent = '正在取消…';
+    setPanelStatus('正在取消…');
   }
 
   function setPanelStatus(text) {
@@ -114,7 +135,7 @@
       throw new Error('请先登录百度网盘账号');
     }
     const destination = await callBridge('getDestinationPath');
-    const engine = new PanRelay.ShareTransferEngine({
+    const engine = (currentEngine = new PanRelay.ShareTransferEngine({
       shareId: meta.shareId,
       userId: meta.userId,
       bdstoken: meta.bdstoken,
@@ -126,7 +147,7 @@
         setPanelStatus(msg);
         appendLog(msg);
       },
-    });
+    }));
     await engine.runSelection(selected, destination);
   }
 
@@ -178,6 +199,7 @@
 
     running = true;
     ensurePanel();
+    setCancelVisible(true);
     setPanelStatus('正在准备接力转存…');
     appendLog('已接管「保存到网盘」');
 
@@ -185,10 +207,17 @@
       await runRelay(selected);
       setPanelStatus('完成');
     } catch (error) {
-      setPanelStatus('失败');
-      appendLog(error.message || String(error));
+      if (error.cancelled) {
+        setPanelStatus('已取消');
+        appendLog('已取消。已转存的部分会保留在你的网盘里。');
+      } else {
+        setPanelStatus('失败');
+        appendLog(error.message || String(error));
+      }
     } finally {
       running = false;
+      currentEngine = null;
+      setCancelVisible(false);
     }
   }
 

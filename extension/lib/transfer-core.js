@@ -6,14 +6,13 @@
   'use strict';
 
   const ROOT_URL = 'https://pan.baidu.com';
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
   class PanRelayError extends Error {
     constructor(message, options = {}) {
       super(message);
       this.name = 'PanRelayError';
       this.errno = options.errno;
       this.response = options.response;
+      this.cancelled = !!options.cancelled;
     }
   }
 
@@ -104,25 +103,63 @@
       this.sekey = options.sekey || '';
       /** @type {string} 用户选择的转存根目录（网盘路径） */
       this.destinationRoot = options.destinationRoot || '/';
+      this.cancelled = false;
+      this.abortController = new AbortController();
     }
 
     progress(message) {
       this.onProgress(String(message));
     }
 
+    /** 已发出的转存请求可能仍会在服务端完成，取消只保证不再发新请求 */
+    cancel() {
+      if (this.cancelled) return;
+      this.cancelled = true;
+      this.abortController.abort();
+    }
+
+    throwIfCancelled() {
+      if (this.cancelled) {
+        throw new PanRelayError('已取消转存', { cancelled: true });
+      }
+    }
+
+    wait(ms) {
+      this.throwIfCancelled();
+      const signal = this.abortController.signal;
+      return new Promise((resolve) => {
+        const timer = setTimeout(done, ms);
+        function done() {
+          clearTimeout(timer);
+          signal.removeEventListener('abort', done);
+          resolve();
+        }
+        signal.addEventListener('abort', done);
+      }).then(() => this.throwIfCancelled());
+    }
+
     async request(path, options = {}) {
+      this.throwIfCancelled();
       const method = options.method || 'GET';
       const query = options.query ? `?${options.query}` : '';
-      const response = await this.fetch(`${ROOT_URL}${path}${query}`, {
-        method,
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        },
-        body: options.body || undefined,
-        credentials: 'include',
-      });
-      const text = await response.text();
+      let response;
+      let text;
+      try {
+        response = await this.fetch(`${ROOT_URL}${path}${query}`, {
+          method,
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          },
+          body: options.body || undefined,
+          credentials: 'include',
+          signal: this.abortController.signal,
+        });
+        text = await response.text();
+      } catch (error) {
+        this.throwIfCancelled();
+        throw error;
+      }
       let data;
       try {
         data = JSON.parse(text);
@@ -203,7 +240,7 @@
       const errno = Number(data?.errno || 0);
       const errMsg = data?.show_msg || data?.errmsg || '';
       if (errno === 0) {
-        if (this.transferCooldownMs > 0) await sleep(this.transferCooldownMs);
+        if (this.transferCooldownMs > 0) await this.wait(this.transferCooldownMs);
         return data;
       }
       const retriable =
@@ -218,7 +255,7 @@
         this.progress(
           `转存受限或超时，${Math.ceil(delay / 1000)} 秒后重试（${retry + 1}/${this.maxRetries}）…`,
         );
-        await sleep(delay);
+        await this.wait(delay);
         return this.transferIds(ids, destination, retry + 1);
       }
       if (errno === 12) {
@@ -246,6 +283,7 @@
       try {
         await this.transferDirectories(directories, destination);
       } catch (error) {
+        if (error.cancelled) throw error;
         if (directories.length === 1) {
           this.recordFailure(directories[0].name, error);
           return;
@@ -350,6 +388,7 @@
           const list = Array.isArray(data.list) ? data.list : [];
           return { items: list.map(mapShareListItem), pageSize };
         } catch (error) {
+          if (error.cancelled) throw error;
           lastError = error;
           if (!isRetriableShareError(error)) {
             throw new PanRelayError(
@@ -367,7 +406,7 @@
           this.progress(
             `列举分享目录超时或繁忙，${Math.ceil(delay / 1000)} 秒后重试（${attempt + 1}/${this.listMaxRetries}，${plan.encoding}）…`,
           );
-          await sleep(delay);
+          await this.wait(delay);
         }
       }
       throw lastError;
@@ -378,7 +417,7 @@
      */
     async processShareDirectoryIncrementally(sourcePath, childDestination, shareDirRaw, fid) {
       await this.createDirectory(childDestination);
-      await sleep(Math.max(800, Math.min(2000, this.transferCooldownMs)));
+      await this.wait(Math.max(800, Math.min(2000, this.transferCooldownMs)));
       for (let page = 1; ; page += 1) {
         this.progress(`读取分享目录第 ${page} 页：${sourcePath}`);
         const { items: batch, pageSize } = await this.fetchShareListPage(
@@ -399,7 +438,7 @@
         }
 
         if (batch.length < pageSize) break;
-        await sleep(600);
+        await this.wait(600);
       }
     }
 

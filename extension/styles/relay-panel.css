@@ -21,11 +21,43 @@
   padding: 12px 14px;
 }
 
+#panrelay-panel .panrelay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
 #panrelay-panel .panrelay-title {
   font-weight: 600;
   font-size: 14px;
-  margin-bottom: 6px;
   color: #7dd3fc;
+}
+
+#panrelay-panel .panrelay-cancel {
+  flex-shrink: 0;
+  padding: 3px 12px;
+  font: inherit;
+  font-size: 12px;
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#panrelay-panel .panrelay-cancel:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+#panrelay-panel .panrelay-cancel:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+#panrelay-panel .panrelay-cancel[hidden] {
+  display: none;
 }
 
 #panrelay-panel .panrelay-status {
