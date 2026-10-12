@@ -100,6 +100,11 @@
     panel.querySelector('.panrelay-status').textContent = text;
   }
 
+  function clearLog() {
+    const log = ensurePanel().querySelector('.panrelay-log');
+    log.replaceChildren();
+  }
+
   function appendLog(text) {
     const panel = ensurePanel();
     const log = panel.querySelector('.panrelay-log');
@@ -201,6 +206,7 @@
     ensurePanel();
     setCancelVisible(true);
     setPanelStatus('正在准备接力转存…');
+    clearLog();
     appendLog('已接管「保存到网盘」');
 
     try {

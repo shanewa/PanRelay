@@ -48,14 +48,20 @@
       .replace(/\/+/g, '/');
   }
 
+  function isTransferLimitError(errno, errMsg) {
+    if (Number(errno) === 12) return true;
+    return /超出|超过|上限|无法保存|单次/.test(String(errMsg || ''));
+  }
+
   function isRetriableShareError(error) {
     if (!error) return false;
     const errno = Number(error.errno);
-    // errno 2 等多为「链接出错/参数错误」，重试无效
-    if (errno === 2 || errno === -7 || errno === 105 || errno === 116) return false;
+    // 2 参数错误；12 单次数量超限，重试不会变少
+    if (errno === 2 || errno === 12 || errno === -7 || errno === 105 || errno === 116) return false;
+    if (isTransferLimitError(errno, error.message)) return false;
     const msg = String(error.message || '');
-    if (/超时|timeout|繁忙|稍后再试|系统|网络/i.test(msg)) return true;
-    return errno === 111 || errno === 1504 || errno === -1;
+    if (/超时|timeout|繁忙|稍后再试|系统繁忙|网络/i.test(msg)) return true;
+    return errno === 4 || errno === 111 || errno === 1504 || errno === -1;
   }
 
   /** 分享侧列举用的目录路径（勿与用户网盘保存路径混淆） */
@@ -243,10 +249,19 @@
         if (this.transferCooldownMs > 0) await this.wait(this.transferCooldownMs);
         return data;
       }
+      if (isTransferLimitError(errno, errMsg)) {
+        const limit = data.target_file_nums_limit;
+        const count = data.target_file_nums;
+        throw new PanRelayError(
+          `超过单次转存限制${limit && count ? `（${count}/${limit}）` : ''}`,
+          { errno: 12, response: data },
+        );
+      }
       const retriable =
+        errno === 4 ||
         errno === 111 ||
         errno === 1504 ||
-        /超时|繁忙|稍后再试|系统|网络/i.test(String(errMsg));
+        /超时|timeout|繁忙|稍后再试|系统繁忙|网络/i.test(String(errMsg));
       if (retriable && retry < this.maxRetries) {
         const delay =
           errno === 111
@@ -257,14 +272,6 @@
         );
         await this.wait(delay);
         return this.transferIds(ids, destination, retry + 1);
-      }
-      if (errno === 12) {
-        const limit = data.target_file_nums_limit;
-        const count = data.target_file_nums;
-        throw new PanRelayError(
-          `超过单次转存限制${limit && count ? `（${count}/${limit}）` : ''}`,
-          { errno, response: data },
-        );
       }
       throw new PanRelayError(errMsg || `转存失败 errno=${errno}`, {
         errno,
