@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "度盘接力存",
   "version": "0.5.0",
-  "description": "百度网盘分享页：用户点击保存后可分批转存；播放页可选倍速，AI 视频笔记可一键下载为 Markdown。需自行登录，无后端。",
+  "description": "百度网盘助手：点击「保存到网盘」后可分批接力转存（突破500限制）；播放页可选视频倍速；AI 视频笔记可一键下载为 Markdown。",
   "permissions": ["storage"],
   "host_permissions": [
     "https://pan.baidu.com/*",
