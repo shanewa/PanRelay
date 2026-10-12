@@ -59,9 +59,10 @@ popup / chrome.storage.sync
 ### 3.1 校验：`extension/lib/unlock.js`
 
 - 关键词常量 `KEYWORD`：`百度网盘插件`（给公众号关键词回复用）。
-- 解锁码拆成 `CODE_PARTS = [8, 2, 7, 4, 6, 1]`，`expectedCode()` 拼成 `827461`。
+- 双轨制：永久码 `LEGACY_CODE = '827461'`（兼容老自动回复）+ 月度码（`ROTATE_SECRET` + UTC 年月经 FNV-1a 取 6 位，每月初自动轮换）。
+- 月度码用 `scripts/gen-unlock-code.mjs` 生成（单源引用本文件算法），填到公众号关键词回复，换码不用发版。
 - `extractCode(input)`：从用户粘贴的文字里抽出连续 6 位数字（允许带「解锁码：」前缀）。
-- `verifyUnlockInput(input)`：抽出的数字是否等于期望码。
+- `verifyUnlockInput(input)`：等于永久码，或命中上 / 当 / 下月码之一（`GRACE_MONTHS = 1` 容差）。
 - `isUnlocked(stored)`：看 `chrome.storage.sync` 的 `unlocked === true`。
 - 导出全局 `PanRelayUnlock`。
 
