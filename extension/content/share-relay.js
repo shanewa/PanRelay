@@ -160,7 +160,13 @@
       return;
     }
 
-    if (!shouldUseRelay(selected)) {
+    const useRelay = shouldUseRelay(selected);
+    console.info('[PanRelay] 选中项', {
+      count: selected.length,
+      dirs: selected.filter((f) => Number(f.isdir) === 1).length,
+      useRelay,
+    });
+    if (!useRelay) {
       try {
         await callBridge('invokeNativeSave');
       } catch (error) {
@@ -186,19 +192,41 @@
     }
   }
 
-  function findSaveTarget(node) {
-    if (!node?.closest) return null;
-    const direct = node.closest(SAVE_SELECTOR);
-    if (direct) return direct;
-    const menuItem = node.closest('.g-button-menu');
-    if (menuItem && menuItem.textContent.trim() === '保存到网盘') return menuItem;
+  function hitsRect(el, x, y) {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  }
+
+  /** 按钮上可能盖着百度的透明层，target 不一定是按钮本身，故再按坐标匹配 */
+  function findSaveTarget(event) {
+    const node = event.target;
+    if (node?.closest) {
+      const direct = node.closest(SAVE_SELECTOR);
+      if (direct) return direct;
+      const menuItem = node.closest('.g-button-menu');
+      if (menuItem && menuItem.textContent.trim() === '保存到网盘') return menuItem;
+      const box = node.closest('.x-button-box');
+      const inBox = box?.querySelector(SAVE_SELECTOR);
+      if (inBox) return inBox;
+    }
+    if (typeof event.clientX !== 'number') return null;
+    for (const el of document.querySelectorAll(SAVE_SELECTOR)) {
+      if (hitsRect(el, event.clientX, event.clientY)) return el;
+    }
     return null;
   }
 
   window.addEventListener(
     'click',
     (event) => {
-      if (!findSaveTarget(event.target)) return;
+      const target = findSaveTarget(event);
+      if (!target) return;
+      console.info('[PanRelay] 捕获保存点击', {
+        nodeType: target.getAttribute('node-type'),
+        enabled: settings.enabled,
+        unlocked: settings.unlocked,
+        running,
+      });
       onSaveClick(event);
     },
     true,
@@ -210,13 +238,15 @@
       type,
       (event) => {
         if (!settings.enabled || !settings.unlocked) return;
-        if (!findSaveTarget(event.target)) return;
+        if (!findSaveTarget(event)) return;
         event.stopPropagation();
         event.stopImmediatePropagation();
       },
       true,
     );
   });
+
+  console.info('[PanRelay] 分享页脚本已加载');
 
   injectBridge();
 })();
