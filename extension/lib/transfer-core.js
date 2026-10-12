@@ -253,7 +253,7 @@
             ? Math.min(30000, 5000 * (retry + 1))
             : Math.min(30000, 3000 * (retry + 1));
         this.progress(
-          `转存受限或超时，${Math.ceil(delay / 1000)} 秒后重试（${retry + 1}/${this.maxRetries}）…`,
+          `转存受限或超时（errno=${errno}），${Math.ceil(delay / 1000)} 秒后重试（${retry + 1}/${this.maxRetries}）…`,
         );
         await this.wait(delay);
         return this.transferIds(ids, destination, retry + 1);
@@ -278,10 +278,10 @@
       this.progress(`失败（已跳过，可稍后单独重试）：${name} — ${message}`);
     }
 
-    async transferDirectoriesSafe(directories, destination) {
+    async transferDirectoriesSafe(directories, destination, ancestry) {
       if (!directories.length) return;
       try {
-        await this.transferDirectories(directories, destination);
+        await this.transferDirectories(directories, destination, ancestry);
       } catch (error) {
         if (error.cancelled) throw error;
         if (directories.length === 1) {
@@ -374,9 +374,10 @@
         tryPlans.push({ fid: null, dirValue: v.value, encoding: v.encoding });
       }
 
-      for (let attempt = 0; attempt < this.listMaxRetries; attempt += 1) {
+      let planIndex = 0;
+      for (let attempt = 0; attempt < this.listMaxRetries && planIndex < tryPlans.length; ) {
         const pageSize = attempt >= 2 ? Math.min(25, this.listPageSize) : this.listPageSize;
-        const plan = tryPlans[Math.min(attempt, tryPlans.length - 1)] || tryPlans[0];
+        const plan = tryPlans[planIndex];
         try {
           const data = await this.request('/share/list', {
             query: this.shareListQuery(page, plan.dirValue, pageSize, {
@@ -386,7 +387,18 @@
             checkErrno: true,
           });
           const list = Array.isArray(data.list) ? data.list : [];
-          return { items: list.map(mapShareListItem), pageSize };
+          const items = list.map(mapShareListItem);
+          const onlySelf =
+            page === 1 &&
+            fid &&
+            items.length > 0 &&
+            items.every((item) => String(item.id) === String(fid));
+          if (onlySelf) {
+            this.progress('列举结果仍是当前文件夹，换一种方式读取…');
+            planIndex += 1;
+            continue;
+          }
+          return { items, pageSize };
         } catch (error) {
           if (error.cancelled) throw error;
           lastError = error;
@@ -407,7 +419,13 @@
             `列举分享目录超时或繁忙，${Math.ceil(delay / 1000)} 秒后重试（${attempt + 1}/${this.listMaxRetries}，${plan.encoding}）…`,
           );
           await this.wait(delay);
+          attempt += 1;
         }
+      }
+      if (planIndex >= tryPlans.length) {
+        throw new PanRelayError(
+          `列举「${normalized}」只返回了文件夹本身，已停止，避免反复转存同一目录`,
+        );
       }
       throw lastError;
     }
@@ -415,7 +433,13 @@
     /**
      * 分页列举并立刻转存，避免超大目录单次 list 拖垮接口。
      */
-    async processShareDirectoryIncrementally(sourcePath, childDestination, shareDirRaw, fid) {
+    async processShareDirectoryIncrementally(
+      sourcePath,
+      childDestination,
+      shareDirRaw,
+      fid,
+      ancestry,
+    ) {
       await this.createDirectory(childDestination);
       await this.wait(Math.max(800, Math.min(2000, this.transferCooldownMs)));
       for (let page = 1; ; page += 1) {
@@ -428,10 +452,15 @@
         );
         if (!batch.length) break;
 
-        const childDirs = batch.filter((c) => c.isDirectory);
+        const childDirs = batch.filter(
+          (c) => c.isDirectory && !ancestry.has(String(c.id)),
+        );
         const childFiles = batch.filter((c) => !c.isDirectory);
+        if (childDirs.length < batch.filter((c) => c.isDirectory).length) {
+          this.progress('跳过与当前目录相同的结果，避免反复转存同一文件夹');
+        }
         for (const dir of childDirs) {
-          await this.transferDirectoriesSafe([dir], childDestination);
+          await this.transferDirectoriesSafe([dir], childDestination, ancestry);
         }
         if (childFiles.length) {
           await this.transferFiles(childFiles, childDestination);
@@ -454,24 +483,35 @@
       }
     }
 
-    async transferDirectories(directories, destination) {
+    async transferDirectories(directories, destination, ancestry = new Set()) {
       if (!directories.length) return;
+      const seen = directories.filter((d) => ancestry.has(String(d.id)));
+      const pending = directories.filter((d) => !ancestry.has(String(d.id)));
+      if (seen.length) {
+        this.progress(
+          `跳过重复目录：${seen.map((d) => d.name).join('、')}`,
+        );
+      }
+      if (!pending.length) return;
       await this.createDirectory(destination);
       try {
-        await this.transferIds(directories.map((d) => d.id), destination);
-        for (const item of directories) {
+        await this.transferIds(pending.map((d) => d.id), destination);
+        for (const item of pending) {
           this.progress(`已转存目录 ${destination || ''}/${item.name}`);
         }
       } catch (error) {
+        if (error.cancelled) throw error;
         if (error.errno !== 12) throw error;
-        this.progress(`目录过大，正在拆分：${directories.map((d) => d.name).join('、')}`);
-        if (directories.length > 1) {
-          const middle = Math.floor(directories.length / 2);
-          await this.transferDirectories(directories.slice(0, middle), destination);
-          await this.transferDirectories(directories.slice(middle), destination);
+        this.progress(`目录过大，正在拆分：${pending.map((d) => d.name).join('、')}`);
+        if (pending.length > 1) {
+          const middle = Math.floor(pending.length / 2);
+          await this.transferDirectories(pending.slice(0, middle), destination, ancestry);
+          await this.transferDirectories(pending.slice(middle), destination, ancestry);
           return;
         }
-        const directory = directories[0];
+        const directory = pending[0];
+        const next = new Set(ancestry);
+        next.add(String(directory.id));
         const sourcePath = normalizeShareListPath(
           directory.sharePath,
           directory.shareDirRaw,
@@ -484,6 +524,7 @@
           childDestination,
           directory.shareDirRaw,
           directory.id,
+          next,
         );
       }
     }
