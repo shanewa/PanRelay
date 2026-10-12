@@ -90,6 +90,15 @@ h2 {
   font-weight: 700;
 }
 
+/* 三个功能标题共用同一套字号字重字距 */
+.card-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
 .card-body {
   transition: opacity 0.15s ease;
 }
@@ -448,10 +457,6 @@ input[type='range'] {
   padding-bottom: 8px;
   margin: 0;
   cursor: pointer;
-}
-
-.note-strip h2 {
-  white-space: nowrap;
 }
 
 .note-strip .hint {
