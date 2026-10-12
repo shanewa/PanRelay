@@ -47,48 +47,30 @@
     </section>
 
     <div id="settingsRoot" class="settings">
-      <div class="settings-col">
-        <section class="card feature">
-          <label class="card-head">
-            <h2>接力转存</h2>
-            <input type="checkbox" class="switch" id="enabled" aria-label="启用接力转存" />
+      <section class="card feature">
+        <label class="card-head">
+          <h2>接力转存</h2>
+          <input type="checkbox" class="switch" id="enabled" aria-label="启用接力转存" />
+        </label>
+        <div class="card-body">
+          <label class="field">
+            <span>每批文件数</span>
+            <input type="number" id="batchSize" min="50" max="500" step="50" />
           </label>
-          <div class="card-body">
-            <label class="field">
-              <span>每批文件数</span>
-              <input type="number" id="batchSize" min="50" max="500" step="50" />
-            </label>
-            <label class="field">
-              <span>小批量也走接力</span>
-              <input type="checkbox" class="switch switch-sm" id="alwaysRelay" />
-            </label>
-            <label class="field field-stack">
-              <span class="field-line">
-                <span>转存间隔</span>
-                <span class="num"><strong id="cooldownLabel">1500</strong> ms</span>
-              </span>
-              <input type="range" id="transferCooldownMs" min="800" max="6000" step="100" />
-            </label>
-            <p class="hint">间隔越大越不容易被限流，但会更慢。免费账号每次最多约 500 个文件。</p>
-          </div>
-        </section>
-
-        <section class="card feature">
-          <label class="card-head">
-            <h2>视频笔记下载</h2>
-            <input
-              type="checkbox"
-              class="switch"
-              id="noteMdExportEnabled"
-              checked
-              aria-label="显示下载MD按钮"
-            />
+          <label class="field">
+            <span>小批量也走接力</span>
+            <input type="checkbox" class="switch switch-sm" id="alwaysRelay" />
           </label>
-          <div class="card-body">
-            <p class="hint">在播放页增加「下载MD」按钮，下载Markdown格式的视频 AI 图文笔记。</p>
-          </div>
-        </section>
-      </div>
+          <label class="field field-stack">
+            <span class="field-line">
+              <span>转存间隔</span>
+              <span class="num"><strong id="cooldownLabel">1500</strong> ms</span>
+            </span>
+            <input type="range" id="transferCooldownMs" min="800" max="6000" step="100" />
+          </label>
+          <p class="hint">间隔越大越不容易被限流，但会更慢。免费账号每次最多约 500 个文件。</p>
+        </div>
+      </section>
 
       <section class="card feature speed-card">
         <label class="card-head">
@@ -108,6 +90,18 @@
           </label>
         </div>
       </section>
+
+      <label class="card feature note-strip">
+        <h2>视频笔记下载</h2>
+        <span class="hint">在播放页增加「下载MD」按钮，下载 Markdown 格式的视频 AI 图文笔记。</span>
+        <input
+          type="checkbox"
+          class="switch"
+          id="noteMdExportEnabled"
+          checked
+          aria-label="显示下载MD按钮"
+        />
+      </label>
     </div>
 
     <footer class="foot">
