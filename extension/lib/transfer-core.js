@@ -568,6 +568,24 @@
       this.progress(`开始接力转存到 ${dest}（每批最多 ${this.batchSize} 个文件）…`);
       if (directories.length) await this.transferDirectories(directories, dest);
       if (files.length) await this.transferFiles(files, dest);
+      this.finish();
+    }
+
+    /** 在分享子目录里全选时：把该目录的全部内容（不含目录本身）转存到 destination */
+    async runDirectoryContents(sharePath, destination) {
+      if (!this.shareId || !this.userId) {
+        throw new PanRelayError('分享页信息不完整，请刷新页面后重试');
+      }
+      const dest = destination || '/';
+      this.destinationRoot = dest;
+      this.failedTasks = [];
+      const source = normalizeShareListPath(sharePath, sharePath, this.shareRoot);
+      this.progress(`开始接力转存「${source}」里的全部内容到 ${dest}（每批最多 ${this.batchSize} 个文件）…`);
+      await this.processShareDirectoryIncrementally(source, dest, sharePath, null, new Set());
+      this.finish();
+    }
+
+    finish() {
       if (this.failedTasks.length) {
         const names = this.failedTasks.map((t) => t.name).join('、');
         throw new PanRelayError(

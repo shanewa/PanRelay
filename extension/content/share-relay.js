@@ -4,7 +4,15 @@
 (function () {
   'use strict';
 
-  const SAVE_SELECTOR = '[node-type="bottomShareSave"], [node-type="shareSave"]';
+  const SAVE_SELECTOR = [
+    '[node-type="bottomShareSave"]',
+    '[node-type="shareSave"]',
+    // 新版分享页（disk-share-v2）
+    'button.bottom_save_btn',
+    'button.save_btn',
+    'button[title="保存到网盘"]',
+  ].join(', ');
+  const SAVE_TEXT = '保存到网盘';
   const DEFAULTS = {
     enabled: true,
     batchSize: 500,
@@ -17,6 +25,8 @@
   let running = false;
   let panelEl = null;
   let currentEngine = null;
+  /** 小批量交还给百度原生保存时，放行下一次程序触发的点击 */
+  let passThroughTarget = null;
 
   chrome.storage.sync.get(DEFAULTS, (stored) => {
     settings = { ...DEFAULTS, ...stored };
@@ -116,8 +126,10 @@
     log.scrollTop = log.scrollHeight;
   }
 
-  function shouldUseRelay(selected) {
-    if (settings.alwaysRelay) return true;
+  function shouldUseRelay(selection) {
+    if (selection.selectAllDir) return true;
+    const selected = selection.files;
+    if (settings.alwaysRelay) return selected.length > 0;
     if (!selected.length) return false;
     if (selected.length > settings.batchSize) return true;
     if (selected.some((f) => Number(f.isdir) === 1)) return true;
@@ -134,7 +146,7 @@
     }
   }
 
-  async function runRelay(selected) {
+  async function runRelay(selection) {
     const meta = await callBridge('getShareMeta');
     if (meta.loginstate !== '1' && meta.loginstate !== 1) {
       throw new Error('请先登录百度网盘账号');
@@ -153,7 +165,41 @@
         appendLog(msg);
       },
     }));
-    await engine.runSelection(selected, destination);
+    if (selection.selectAllDir) {
+      await engine.runDirectoryContents(selection.selectAllDir, destination);
+    } else {
+      await engine.runSelection(selection.files, destination);
+    }
+  }
+
+  function normalizeSelection(result) {
+    if (Array.isArray(result)) return { files: result, unresolved: [] };
+    return {
+      files: Array.isArray(result?.files) ? result.files : [],
+      unresolved: Array.isArray(result?.unresolved) ? result.unresolved : [],
+      selectAllDir: result?.selectAllDir || '',
+    };
+  }
+
+  function nativeSaveClick(target) {
+    passThroughTarget = target;
+    try {
+      target.click();
+    } finally {
+      passThroughTarget = null;
+    }
+  }
+
+  /** 百度超限弹窗关闭后，付费引导遮罩偶尔不随之消失，会把整页挡住 */
+  function clearStrayPaymentMask() {
+    const visibleDialog = [...document.querySelectorAll('.dialog')].some((d) => {
+      const style = getComputedStyle(d);
+      return style.display !== 'none' && style.visibility !== 'hidden';
+    });
+    if (visibleDialog) return;
+    document.querySelectorAll('.module-canvas').forEach((mask) => {
+      if (getComputedStyle(mask).display !== 'none') mask.style.display = 'none';
+    });
   }
 
   function blockEvent(event) {
@@ -162,7 +208,7 @@
     event.stopImmediatePropagation();
   }
 
-  async function onSaveClick(event) {
+  async function onSaveClick(event, target) {
     if (!settings.enabled) return;
     if (!settings.unlocked) {
       PanRelayUnlockGuide.showGuide({ force: true });
@@ -177,24 +223,35 @@
       return;
     }
 
-    let selected;
+    let selection;
     try {
-      selected = await callBridge('getSelectedFiles');
+      selection = normalizeSelection(await callBridge('getSelectedFiles'));
     } catch (error) {
       ensurePanel();
       appendLog(error.message);
       return;
     }
 
-    const useRelay = shouldUseRelay(selected);
+    if (selection.unresolved.length) {
+      ensurePanel();
+      setPanelStatus('无法识别选中项');
+      appendLog(
+        `有 ${selection.unresolved.length} 个选中项读不到文件信息，已停止，没有转存任何内容。请刷新分享页、重新勾选后再点保存。`,
+      );
+      return;
+    }
+
+    const useRelay = shouldUseRelay(selection);
     console.info('[PanRelay] 选中项', {
-      count: selected.length,
-      dirs: selected.filter((f) => Number(f.isdir) === 1).length,
+      count: selection.files.length,
+      dirs: selection.files.filter((f) => Number(f.isdir) === 1).length,
+      selectAllDir: selection.selectAllDir || undefined,
       useRelay,
     });
     if (!useRelay) {
       try {
-        await callBridge('invokeNativeSave');
+        const result = await callBridge('invokeNativeSave');
+        if (result?.reason === 'unsupported' && target) nativeSaveClick(target);
       } catch (error) {
         ensurePanel();
         appendLog(error.message);
@@ -210,7 +267,7 @@
     appendLog('已接管「保存到网盘」');
 
     try {
-      await runRelay(selected);
+      await runRelay(selection);
       setPanelStatus('完成');
     } catch (error) {
       if (error.cancelled) {
@@ -236,11 +293,15 @@
   function findSaveTarget(event) {
     const node = event.target;
     if (node?.closest) {
+      // 只认分享页里的保存按钮，不碰百度弹窗里同名的按钮
+      if (node.closest('.dialog, [role="dialog"], .module-canvas')) return null;
       const direct = node.closest(SAVE_SELECTOR);
       if (direct) return direct;
       const menuItem = node.closest('.g-button-menu');
-      if (menuItem && menuItem.textContent.trim() === '保存到网盘') return menuItem;
-      const box = node.closest('.x-button-box');
+      if (menuItem && menuItem.textContent.trim() === SAVE_TEXT) return menuItem;
+      const button = node.closest('button, [role="button"]');
+      if (button && button.textContent.trim() === SAVE_TEXT) return button;
+      const box = node.closest('.x-button-box, .bottom-save-btn-wrap');
       const inBox = box?.querySelector(SAVE_SELECTOR);
       if (inBox) return inBox;
     }
@@ -254,15 +315,21 @@
   window.addEventListener(
     'click',
     (event) => {
+      if (passThroughTarget && event.target === passThroughTarget) return;
+      if (event.target?.closest?.('.dialog-close')) {
+        setTimeout(clearStrayPaymentMask, 400);
+        return;
+      }
       const target = findSaveTarget(event);
       if (!target) return;
       console.info('[PanRelay] 捕获保存点击', {
         nodeType: target.getAttribute('node-type'),
+        className: target.className,
         enabled: settings.enabled,
         unlocked: settings.unlocked,
         running,
       });
-      onSaveClick(event);
+      onSaveClick(event, target);
     },
     true,
   );
@@ -273,6 +340,7 @@
       type,
       (event) => {
         if (!settings.enabled || !settings.unlocked) return;
+        if (passThroughTarget) return;
         if (!findSaveTarget(event)) return;
         event.stopPropagation();
         event.stopImmediatePropagation();

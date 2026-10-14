@@ -130,7 +130,7 @@ extension/
 
 ## 参考
 
-- 分享页 UI 行为可参考本地保存的页面样本（`保存到网盘` → `node-type="bottomShareSave"`）
+- 分享页 UI 行为可参考本地保存的页面样本（`保存到网盘`：旧版 `node-type="bottomShareSave"`，新版 `button.bottom_save_btn`）
 - 扩展工程布局参考同目录下的 `ai-content-factory/apps/extension`
 
 ## 许可

@@ -115,10 +115,18 @@ MAIN 侧 `handlers`（`extension/injected/page-bridge.js`）：
 
 | method | 函数 | 数据来源 |
 |--------|------|----------|
-| `getSelectedFiles` | `getSelectedFiles()` | `getContext().list.getSelected()`，带 `fs_id`、`isdir`、`path`、**`path_raw`** |
-| `getShareMeta` | `getShareMeta()` | `yunData` / `locals`：`shareid`、`share_uk`、`bdstoken`、`loginstate`、分享根路径 |
-| `getDestinationPath` | `getDestinationPath()` | `localStorage`：`${username}_cur_transfer_save_path`（与官方底部路径一致）；协作空间再看 collab key |
-| `invokeNativeSave` | `invokeNativeSave()` | `ctx.message.callPlugin('保存到网盘@com.baidu.pan.share', { filesList })` |
+| `getSelectedFiles` | `getSelectedFiles()` | 旧版：`getContext().list.getSelected()`；新版：见下方，返回 `{ files, unresolved }` 或 `{ selectAllDir }`。`files` 每项带 `fs_id`、`isdir`、`path`、**`path_raw`** |
+| `getShareMeta` | `getShareMeta()` | `yunData` / `locals`（新版为 `__DISK_SHARE_V2_LOCALS__`）：`shareid`、`share_uk`、`bdstoken`、`loginstate`、分享根路径 |
+| `getDestinationPath` | `getDestinationPath()` | `localStorage`：`${username}_cur_transfer_save_path`（与官方底部路径一致；新版页面按任意 `*_cur_transfer_save_path` 兜底，读不到存到 `/`）；协作空间再看 collab key |
+| `invokeNativeSave` | `invokeNativeSave()` | 旧版：`ctx.message.callPlugin('保存到网盘@com.baidu.pan.share', { filesList })`；新版返回 `{ reason: 'unsupported' }`，由 `share-relay.js` 放行一次原生点击 |
+
+**新版分享页（`SHARETYPE = 'new_multi_disk_share'`，Vue + Pinia）** 没有 `require` / `locals`：
+
+- 启动数据在 `<script id="locals-data" type="application/json">`，页面解析后挂到 `window.__DISK_SHARE_V2_LOCALS__`（含根目录 `file_list`）。
+- 勾选状态只在 DOM：行 `[data-file-key="<fs_id>"]`，勾选看行内 `[role="checkbox"][aria-checked="true"]`，表头全选看 `.share-list-header__check`。
+- 进入子目录后 `file_list` 里没有当前层，桥接在加载时挂钩 `XMLHttpRequest` / `fetch`，缓存列表接口响应里的每一项（按 `fs_id`），并记下最近一次列举的 `dir`。
+- 子目录里全选时列表可能是虚拟滚动，DOM 只有可见行，所以返回 `{ selectAllDir }`，由引擎 `runDirectoryContents()` 分页列举整个目录。
+- 有勾选项查不到文件信息时返回 `unresolved`，`share-relay.js` 直接停止并提示刷新，不做部分转存。
 
 `path_raw` 必须保留接口原始 path：文件夹名里的 `+` 若被 `decodeURIComponent` 成空格，后续 `/share/list?dir=` 会列错目录。
 
@@ -129,8 +137,17 @@ MAIN 侧 `handlers`（`extension/injected/page-bridge.js`）：
 捕获阶段监听点击，选择器：
 
 ```js
-const SAVE_SELECTOR = '[node-type="bottomShareSave"], [node-type="shareSave"]';
+const SAVE_SELECTOR = [
+  '[node-type="bottomShareSave"]',
+  '[node-type="shareSave"]',
+  // 新版分享页（disk-share-v2）
+  'button.bottom_save_btn',
+  'button.save_btn',
+  'button[title="保存到网盘"]',
+].join(', ');
 ```
+
+另按按钮文字「保存到网盘」兜底；点在 `.dialog` / `.module-canvas`（百度弹窗和遮罩）里的一律不算。点百度弹窗的关闭按钮后，若已没有可见弹窗而 `.module-canvas` 遮罩还在，会把遮罩隐藏（`clearStrayPaymentMask`）。
 
 流程：
 
@@ -300,7 +317,7 @@ Isolated 的 `video-speed.js` 能读 `chrome.storage.sync`，但改不了播放�
 
 ## 8. 已知脆弱点（改版时优先看）
 
-1. 保存按钮 `node-type="bottomShareSave"` / `shareSave` 若改名，`SAVE_SELECTOR` 失效。
+1. 保存按钮 `node-type="bottomShareSave"` / `shareSave`，或新版 `button.bottom_save_btn` 若改名，`SAVE_SELECTOR` 失效（文字「保存到网盘」兜底仍可能命中）。新版列表行的 `data-file-key`、复选框 `aria-checked` 若改，`getSelectedFilesV2()` 读不到选中项。
 2. `require('system-core:context/context.js')` 或 `callPlugin` 名变更，桥会超时或 `invokeNativeSave` 失败。
 3. 底部路径不再写 `${username}_cur_transfer_save_path`，会转存到 `/`。
 4. 播放器底栏 class（`u-icon-volume`、`vp-video__control-bar--button`）变更，HUD 插不进去（倍速本身仍可由 `speed-main.js` 生效）。

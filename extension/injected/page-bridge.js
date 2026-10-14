@@ -1,9 +1,72 @@
 /**
  * 运行在页面主世界，可访问百度网盘的 require / locals / context。
+ * 新版分享页（disk-share-v2，Vue）没有 require / locals，改读
+ * window.__DISK_SHARE_V2_LOCALS__、列表 DOM，以及页面自己的列表接口响应。
  */
 (function () {
   if (window.__panRelayBridgeInstalled) return;
   window.__panRelayBridgeInstalled = true;
+
+  /** fs_id -> 文件信息；新版页面进入子目录后只能从列表接口响应里拿到 path / isdir */
+  const knownFiles = new Map();
+  let lastListDir = '';
+
+  function rememberList(url, data) {
+    const list = data && Array.isArray(data.list) ? data.list : null;
+    if (!list) return;
+    for (const item of list) {
+      if (item && item.fs_id != null) knownFiles.set(String(item.fs_id), item);
+    }
+    if (!/share/.test(String(url))) return;
+    try {
+      const params = new URL(url, location.href).searchParams;
+      const dir = params.get('dir');
+      lastListDir = dir && params.get('root') !== '1' ? decodePath(dir) : '';
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  function isListUrl(url) {
+    return /\/share\/list|\/list\b|list\?/.test(String(url || ''));
+  }
+
+  function hookListResponses() {
+    const origOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+      if (isListUrl(url)) {
+        this.addEventListener('load', () => {
+          try {
+            rememberList(url, JSON.parse(this.responseText));
+          } catch (_) {
+            /* ignore */
+          }
+        });
+      }
+      return origOpen.call(this, method, url, ...rest);
+    };
+
+    const origFetch = window.fetch;
+    if (typeof origFetch !== 'function') return;
+    window.fetch = function (input, init) {
+      const url = typeof input === 'string' ? input : input?.url;
+      const result = origFetch.call(this, input, init);
+      if (isListUrl(url)) {
+        result
+          .then((res) => res.clone().json())
+          .then((data) => rememberList(url, data))
+          .catch(() => {});
+      }
+      return result;
+    };
+  }
+
+  hookListResponses();
+
+  function getV2Locals() {
+    const data = window.__DISK_SHARE_V2_LOCALS__;
+    return data && typeof data === 'object' ? data : null;
+  }
 
   function getContext() {
     try {
@@ -22,12 +85,23 @@
     }
   }
 
+  function readSavedTransferPath(username) {
+    const direct = username ? localStorage.getItem(`${username}_cur_transfer_save_path`) : null;
+    if (direct) return direct;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.endsWith('_cur_transfer_save_path')) return localStorage.getItem(key);
+    }
+    return null;
+  }
+
   function getDestinationPath() {
     const locals = window.locals;
-    if (!locals || typeof locals.get !== 'function') return '/';
-
-    const username = String(locals.get('username') || '').replace(/@/gi, '');
-    const raw = localStorage.getItem(`${username}_cur_transfer_save_path`);
+    const v2 = getV2Locals();
+    const rawName =
+      locals && typeof locals.get === 'function' ? locals.get('username') : v2?.username;
+    const username = String(rawName || '').replace(/@/gi, '');
+    const raw = readSavedTransferPath(username);
     if (!raw) return '/';
 
     const [pathPart, tsPart] = raw.split('?');
@@ -53,7 +127,11 @@
   function getShareMeta() {
     const y = window.yunData || {};
     const locals = window.locals;
-    const get = locals && typeof locals.get === 'function' ? locals.get.bind(locals) : () => undefined;
+    const v2 = getV2Locals() || {};
+    const get =
+      locals && typeof locals.get === 'function'
+        ? locals.get.bind(locals)
+        : (key) => v2[key];
 
     const fileList = get('file_list') || [];
     const first = fileList[0] || {};
@@ -64,6 +142,8 @@
       y.data?.sign ||
       get('sign') ||
       get('sekey') ||
+      window.currentSekey ||
+      v2.currentSekey ||
       '';
     return {
       shareId: String(y.shareid || get('shareid') || ''),
@@ -75,18 +155,68 @@
     };
   }
 
-  function getSelectedFiles() {
-    const ctx = getContext();
-    if (!ctx?.list?.getSelected) return [];
-    const list = ctx.list.getSelected() || [];
-    return list.map((item) => ({
+  function toSelected(item) {
+    return {
       fs_id: item.fs_id,
       isdir: Number(item.isdir) === 1 ? 1 : 0,
       server_filename: item.server_filename,
       path: decodePath(item.path),
       path_raw: item.path,
       parent_path: decodePath(item.parent_path),
-    }));
+    };
+  }
+
+  function isRowChecked(row) {
+    const box = row.querySelector('[role="checkbox"]');
+    if (box) return box.getAttribute('aria-checked') === 'true';
+    return row.classList.contains('JS-item-active');
+  }
+
+  function isAllChecked() {
+    const box = document.querySelector('.share-list-header__check [role="checkbox"]');
+    return !!box && box.getAttribute('aria-checked') === 'true';
+  }
+
+  /** 新版分享页：勾选状态在 DOM 上，文件信息来自启动数据和列表接口响应 */
+  function getSelectedFilesV2() {
+    const v2 = getV2Locals() || {};
+    const rootList = Array.isArray(v2.file_list) ? v2.file_list : [];
+    for (const item of rootList) {
+      if (item && item.fs_id != null && !knownFiles.has(String(item.fs_id))) {
+        knownFiles.set(String(item.fs_id), item);
+      }
+    }
+
+    const rows = [...document.querySelectorAll('[data-file-key]')];
+    const checked = rows.filter(isRowChecked);
+    const rootPath = decodePath(rootList[0]?.parent_path || '');
+    const inSubDir = !!lastListDir && lastListDir !== '/' && lastListDir !== rootPath;
+
+    // 列表可能是虚拟滚动，全选时 DOM 里只有可见的几行；子目录全选直接转存整个目录的内容
+    if (isAllChecked() && inSubDir) {
+      return { selectAllDir: lastListDir, count: checked.length };
+    }
+    const ids = isAllChecked() && !inSubDir && rootList.length
+      ? rootList.map((item) => String(item.fs_id))
+      : checked.map((row) => String(row.getAttribute('data-file-key')));
+
+    const files = [];
+    const unresolved = [];
+    for (const id of ids) {
+      const item = knownFiles.get(id);
+      if (item) files.push(toSelected(item));
+      else unresolved.push(id);
+    }
+    return { files, unresolved };
+  }
+
+  function getSelectedFiles() {
+    const ctx = getContext();
+    if (ctx?.list?.getSelected) {
+      return { files: (ctx.list.getSelected() || []).map(toSelected), unresolved: [] };
+    }
+    if (getV2Locals()) return getSelectedFilesV2();
+    return { files: [], unresolved: [] };
   }
 
   function serializeFile(item) {
@@ -103,7 +233,7 @@
     const ctx = getContext();
     const locals = window.locals;
     if (!ctx?.message?.callPlugin || !locals) {
-      throw new Error('无法调用网盘原生保存');
+      return { ok: false, reason: 'unsupported' };
     }
     if (locals.get('self')) {
       throw new Error('无法转存自己分享的文件');
