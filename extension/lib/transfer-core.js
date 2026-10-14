@@ -381,15 +381,16 @@
       await this.ensureBdstoken();
       const { normalized, variants } = this.buildShareListDirVariants(sharePath, shareDirRaw);
       let lastError;
+      // 新版分享页上带 fid 的列举常只返回文件夹本身，按 dir 路径列举更可靠，放在前面
       const tryPlans = [];
+      for (const v of variants) {
+        tryPlans.push({ fid: null, dirValue: v.value, encoding: v.encoding });
+      }
       if (fid) {
         for (const v of variants) {
           tryPlans.push({ fid, dirValue: v.value, encoding: `fid+${v.encoding}` });
         }
         tryPlans.push({ fid, dirValue: '', encoding: 'fid-only' });
-      }
-      for (const v of variants) {
-        tryPlans.push({ fid: null, dirValue: v.value, encoding: v.encoding });
       }
 
       let planIndex = 0;
@@ -420,6 +421,11 @@
         } catch (error) {
           if (error.cancelled) throw error;
           lastError = error;
+          // 某种路径写法不被认可（errno 2）时换下一种，全部失败才报错
+          if (Number(error.errno) === 2 && planIndex < tryPlans.length - 1) {
+            planIndex += 1;
+            continue;
+          }
           if (!isRetriableShareError(error)) {
             throw new PanRelayError(
               `列举分享目录失败：${this.formatShareListError(error)}（路径：${normalized}）`,

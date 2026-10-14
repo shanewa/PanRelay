@@ -205,7 +205,7 @@ errno **`12`**：单次数量超限，向上抛给拆分逻辑。
 
 #### 分页列举：`fetchShareListPage` / `processShareDirectoryIncrementally`
 
-`GET /share/list`，query 由 `shareListQuery(page, dirValue, pageSize, { fid })` 组装。子目录列举带 `root=0`（根层为 `root=1`）；有 `fs_id` 时优先 `fid=`，并附带 `sekey`（`BDCLND` / 页面 `sign`）。`errno 2`（链接出错）不重试。
+`GET /share/list`，query 由 `shareListQuery(page, dirValue, pageSize, { fid })` 组装。子目录列举带 `root=0`（根层为 `root=1`），并附带 `sekey`（`BDCLND` / 页面 `sign`）。先按 `dir=` 路径的几种编码列举，再退到 `fid=`（新版分享页上带 `fid` 常只返回文件夹本身，会被识别并跳过）。某种写法 `errno 2`（链接出错）时换下一种，全部失败才报错。
 
 `dirQueryValue(shareDirRaw, sharePath)`：
 
