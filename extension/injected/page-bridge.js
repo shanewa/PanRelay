@@ -155,13 +155,43 @@
     };
   }
 
+  function getRootFileList() {
+    const locals = window.locals;
+    if (locals && typeof locals.get === 'function') {
+      const list = locals.get('file_list');
+      if (Array.isArray(list)) return list;
+    }
+    const v2 = getV2Locals();
+    return Array.isArray(v2?.file_list) ? v2.file_list : [];
+  }
+
+  /**
+   * share/list 的 dir= 只认 /sharelink{uk}-{fsid}/… 形式；新版页面的列表接口有时返回
+   * 分享者网盘里的真实路径（如 /我的资源/xxx），要按分享根层的文件名换回 sharelink 前缀。
+   */
+  function toSharePath(rawPath) {
+    const decoded = decodePath(rawPath);
+    if (!decoded || /^\/?sharelink/i.test(decoded)) return decoded;
+    const rootList = getRootFileList();
+    const shareRoot = decodePath(rootList[0]?.parent_path || '');
+    if (!/sharelink/i.test(shareRoot)) return decoded;
+    const rootNames = new Set(rootList.map((item) => item.server_filename));
+    const segments = decoded.split('/').filter(Boolean);
+    const index = segments.findIndex((seg) => rootNames.has(seg));
+    if (index < 0) return decoded;
+    return `${shareRoot.replace(/\/$/, '')}/${segments.slice(index).join('/')}`;
+  }
+
   function toSelected(item) {
+    const rawPath = item.path;
+    const sharePath = toSharePath(rawPath);
+    const remapped = sharePath !== decodePath(rawPath);
     return {
       fs_id: item.fs_id,
       isdir: Number(item.isdir) === 1 ? 1 : 0,
       server_filename: item.server_filename,
-      path: decodePath(item.path),
-      path_raw: item.path,
+      path: sharePath,
+      path_raw: remapped ? sharePath : rawPath,
       parent_path: decodePath(item.parent_path),
     };
   }
@@ -190,11 +220,12 @@
     const rows = [...document.querySelectorAll('[data-file-key]')];
     const checked = rows.filter(isRowChecked);
     const rootPath = decodePath(rootList[0]?.parent_path || '');
-    const inSubDir = !!lastListDir && lastListDir !== '/' && lastListDir !== rootPath;
+    const listDir = toSharePath(lastListDir);
+    const inSubDir = !!listDir && listDir !== '/' && listDir !== rootPath;
 
     // 列表可能是虚拟滚动，全选时 DOM 里只有可见的几行；子目录全选直接转存整个目录的内容
     if (isAllChecked() && inSubDir) {
-      return { selectAllDir: lastListDir, count: checked.length };
+      return { selectAllDir: listDir, count: checked.length };
     }
     const ids = isAllChecked() && !inSubDir && rootList.length
       ? rootList.map((item) => String(item.fs_id))

@@ -469,6 +469,12 @@
           fid,
         );
         if (!batch.length) break;
+        for (const item of batch) {
+          if (!/sharelink/i.test(item.sharePath || '') && /sharelink/i.test(sourcePath)) {
+            item.sharePath = joinPath(sourcePath, item.name);
+            item.shareDirRaw = item.sharePath;
+          }
+        }
 
         const childDirs = batch.filter(
           (c) => c.isDirectory && !ancestry.has(String(c.id)),

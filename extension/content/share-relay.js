@@ -12,7 +12,8 @@
     'button.save_btn',
     'button[title="保存到网盘"]',
   ].join(', ');
-  const SAVE_TEXT = '保存到网盘';
+  const SAVE_TEXTS = ['保存到网盘', '保存至网盘'];
+  const LIMIT_DIALOG_TEXT = /文件数超出|超出转存上限|超过\s*\d+\s*个文件/;
   const DEFAULTS = {
     enabled: true,
     batchSize: 500,
@@ -27,6 +28,7 @@
   let currentEngine = null;
   /** 小批量交还给百度原生保存时，放行下一次程序触发的点击 */
   let passThroughTarget = null;
+  let lastUserClickAt = 0;
 
   chrome.storage.sync.get(DEFAULTS, (stored) => {
     settings = { ...DEFAULTS, ...stored };
@@ -214,16 +216,71 @@
     }
   }
 
+  function isShown(el) {
+    const style = getComputedStyle(el);
+    return style.display !== 'none' && style.visibility !== 'hidden';
+  }
+
+  function hideMasks() {
+    document.querySelectorAll('.module-canvas').forEach((mask) => {
+      if (isShown(mask)) mask.style.setProperty('display', 'none', 'important');
+    });
+    for (const el of [document.documentElement, document.body]) {
+      if (el && el.style.overflow === 'hidden') el.style.overflow = '';
+    }
+  }
+
   /** 百度超限弹窗关闭后，付费引导遮罩偶尔不随之消失，会把整页挡住 */
   function clearStrayPaymentMask() {
-    const visibleDialog = [...document.querySelectorAll('.dialog')].some((d) => {
-      const style = getComputedStyle(d);
-      return style.display !== 'none' && style.visibility !== 'hidden';
+    if ([...document.querySelectorAll('.dialog')].some(isShown)) return;
+    hideMasks();
+  }
+
+  function findLimitDialog() {
+    for (const dialog of document.querySelectorAll('#vip-guide-vip-intro, .dialog, [role="dialog"]')) {
+      if (panelEl?.contains(dialog) || !isShown(dialog)) continue;
+      if (dialog.id === 'vip-guide-vip-intro' || LIMIT_DIALOG_TEXT.test(dialog.textContent || '')) {
+        return dialog;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 百度的超限付费弹窗：遮罩层级有时高于弹窗本身，连关闭按钮都点不到，只能刷新。
+   * 一出现就连同遮罩移除；若用户已解锁，直接改由 PanRelay 分批转存。
+   */
+  function dismissLimitDialog() {
+    const dialog = findLimitDialog();
+    if (!dialog) return;
+    dialog.style.setProperty('display', 'none', 'important');
+    hideMasks();
+    console.info('[PanRelay] 已移除百度超限弹窗与遮罩');
+    if (!settings.enabled || !settings.unlocked || running) return;
+    // 只在用户刚点过保存时接手，避免页面自行弹窗时擅自开始转存
+    if (Date.now() - lastUserClickAt > 8000) return;
+    startSave(null, { forceRelay: true });
+  }
+
+  let dialogCheckQueued = false;
+  function queueDialogCheck() {
+    if (dialogCheckQueued) return;
+    dialogCheckQueued = true;
+    setTimeout(() => {
+      dialogCheckQueued = false;
+      dismissLimitDialog();
+    }, 50);
+  }
+
+  function watchLimitDialog() {
+    const root = document.body || document.documentElement;
+    new MutationObserver(queueDialogCheck).observe(root, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style', 'class'],
     });
-    if (visibleDialog) return;
-    document.querySelectorAll('.module-canvas').forEach((mask) => {
-      if (getComputedStyle(mask).display !== 'none') mask.style.display = 'none';
-    });
+    queueDialogCheck();
   }
 
   function blockEvent(event) {
@@ -240,13 +297,27 @@
     }
 
     blockEvent(event);
+    await startSave(target, { forceRelay: false });
+  }
 
+  async function startSave(target, { forceRelay }) {
     if (running) {
       ensurePanel();
       appendLog('接力转存进行中，请等待完成后再点保存');
       return;
     }
+    // 读取选中项要 await，先占住，避免超限弹窗监听与点击同时触发两次转存
+    running = true;
+    try {
+      await saveSelection(target, forceRelay);
+    } finally {
+      running = false;
+      currentEngine = null;
+      setCancelVisible(false);
+    }
+  }
 
+  async function saveSelection(target, forceRelay) {
     let selection;
     try {
       selection = normalizeSelection(await callBridge('getSelectedFiles'));
@@ -265,7 +336,15 @@
       return;
     }
 
-    const useRelay = shouldUseRelay(selection);
+    const useRelay = forceRelay
+      ? selection.files.length > 0 || !!selection.selectAllDir
+      : shouldUseRelay(selection);
+    if (forceRelay && !useRelay) {
+      ensurePanel();
+      setPanelStatus('无法识别选中项');
+      appendLog('百度提示超出转存上限，但读不到勾选的文件。请刷新分享页、重新勾选后再点保存。');
+      return;
+    }
     console.info('[PanRelay] 选中项', {
       count: selection.files.length,
       dirs: selection.files.filter((f) => Number(f.isdir) === 1).length,
@@ -283,12 +362,15 @@
       return;
     }
 
-    running = true;
     ensurePanel();
     setCancelVisible(true);
     setPanelStatus('正在准备接力转存…');
     clearLog();
-    appendLog('已接管「保存到网盘」');
+    appendLog(
+      forceRelay
+        ? '百度提示超出转存上限，已关闭弹窗，改由 PanRelay 分批转存'
+        : '已接管「保存到网盘」',
+    );
 
     try {
       await runRelay(selection);
@@ -301,10 +383,6 @@
         setPanelStatus('失败');
         appendLog(error.message || String(error));
       }
-    } finally {
-      running = false;
-      currentEngine = null;
-      setCancelVisible(false);
     }
   }
 
@@ -322,12 +400,17 @@
       const direct = node.closest(SAVE_SELECTOR);
       if (direct) return direct;
       const menuItem = node.closest('.g-button-menu');
-      if (menuItem && menuItem.textContent.trim() === SAVE_TEXT) return menuItem;
+      if (menuItem && SAVE_TEXTS.includes(menuItem.textContent.trim())) return menuItem;
       const button = node.closest('button, [role="button"]');
-      if (button && button.textContent.trim() === SAVE_TEXT) return button;
+      if (button && SAVE_TEXTS.includes(button.textContent.trim())) return button;
       const box = node.closest('.x-button-box, .bottom-save-btn-wrap');
       const inBox = box?.querySelector(SAVE_SELECTOR);
       if (inBox) return inBox;
+      // 工具栏的「保存至网盘」可能是带图标的 div，文字在子节点里
+      let el = node;
+      for (let depth = 0; el && depth < 4; depth += 1, el = el.parentElement) {
+        if (SAVE_TEXTS.includes(el.textContent.trim())) return el;
+      }
     }
     if (typeof event.clientX !== 'number') return null;
     for (const el of document.querySelectorAll(SAVE_SELECTOR)) {
@@ -339,6 +422,7 @@
   window.addEventListener(
     'click',
     (event) => {
+      if (event.isTrusted) lastUserClickAt = Date.now();
       if (passThroughTarget && event.target === passThroughTarget) return;
       if (event.target?.closest?.('.dialog-close')) {
         setTimeout(clearStrayPaymentMask, 400);
@@ -376,4 +460,6 @@
   console.info('[PanRelay] 分享页脚本已加载');
 
   injectBridge();
+  if (document.body) watchLimitDialog();
+  else document.addEventListener('DOMContentLoaded', watchLimitDialog, { once: true });
 })();

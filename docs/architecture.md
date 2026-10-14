@@ -147,7 +147,11 @@ const SAVE_SELECTOR = [
 ].join(', ');
 ```
 
-另按按钮文字「保存到网盘」兜底；点在 `.dialog` / `.module-canvas`（百度弹窗和遮罩）里的一律不算。点百度弹窗的关闭按钮后，若已没有可见弹窗而 `.module-canvas` 遮罩还在，会把遮罩隐藏（`clearStrayPaymentMask`）。
+另按按钮文字「保存到网盘」「保存至网盘」（工具栏）兜底；点在 `.dialog` / `.module-canvas`（百度弹窗和遮罩）里的一律不算。点百度弹窗的关闭按钮后，若已没有可见弹窗而 `.module-canvas` 遮罩还在，会把遮罩隐藏（`clearStrayPaymentMask`）。
+
+`watchLimitDialog` 用 MutationObserver 盯百度的超限付费弹窗（`#vip-guide-vip-intro` 或文案含「文件数超出」）：一出现就连同 `.module-canvas` 遮罩隐藏（遮罩层级可能高于弹窗，连关闭按钮都点不到）。若用户 8 秒内点过页面且已解锁，直接 `startSave(null, { forceRelay: true })` 接手分批转存。`startSave` 在 await 之前就置 `running`，防止弹窗监听和点击重复启动。
+
+新版页面的列表接口可能返回分享者网盘里的真实路径（如 `/我的资源/xxx`），`page-bridge.js` 的 `toSharePath` 按分享根层文件名换回 `/sharelink{uk}-{fsid}/…`；引擎列子目录时，接口返回的子项路径不含 `sharelink` 的，改用「父目录路径 + 名称」。
 
 流程：
 
