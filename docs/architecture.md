@@ -208,13 +208,19 @@ errno **`12`**：单次数量超限，向上抛给拆分逻辑。
 - 原始 path 已是百分号编码（含 `%2F`）→ 尽量原样使用，避免二次解码把 `+` 变成空格。
 - 否则 `encodePath`（`encodeURIComponent` 但保留 `/`）。
 
-默认每页 60；重试两次后降到 25。超时类错误最多 `listMaxRetries`（10）次。
+`order=name`、默认每页 100（`listPageSize`）；按名称排序保证翻页稳定，转存过程中不会因排序变化漏项或重复。重试两次后降到 25。超时类错误最多 `listMaxRetries`（10）次。
 
-`processShareDirectoryIncrementally`：先 `createDirectory(childDestination)`（`/api/list` 不存在 errno `-9` 再 `POST /api/create`），再逐页：子目录 `transferDirectoriesSafe`，子文件 `transferFiles`。这样超大目录不会一次 list 全量。
+`processShareDirectoryIncrementally`：先 `createDirectory(childDestination)`（`/api/list` 不存在 errno `-9` 再 `POST /api/create`），再逐页：本页子目录**整组**交给 `transferDirectoriesSafe`（能一次转完就不逐个请求），子文件 `transferFiles`。这样超大目录不会一次 list 全量。
+
+`transferDirectoriesSafe` 多目录整体失败（非 errno 12）时，退回逐个目录重试；`handledIds` 记录已成功或已进入拆分的 `fs_id`，避免重试时重复转存。单目录拆分过程中的异常记入 `failedTasks`，不中断其它目录。
 
 #### 文件批次：`transferFiles(files, destination)`
 
-按 `batchSize`（默认 500）切片调用 `transferIds`。
+按 `fileBatchSize`（初始为 `batchSize`，默认 500）切片调用 `transferIds`。遇 errno 12 自动减半并重试当前批，减半后的批量对后续批次继续生效。
+
+#### 分享元数据兜底：`parseShareHtml(html)`
+
+页面桥拿不到 `shareId` / `uk` 时，`share-relay.js` 重新 `fetch(location.href)`，先解析新版 `<script id="locals-data">` JSON，再解析旧版 `locals.mset({...})`。
 
 #### 入口：`runSelection(selected, destination)`
 

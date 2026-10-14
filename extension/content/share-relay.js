@@ -146,8 +146,32 @@
     }
   }
 
-  async function runRelay(selection) {
+  /** 页面全局变量读不到时（百度又改版），重新拉一次当前分享页 HTML 解析 */
+  async function getShareMetaWithFallback() {
     const meta = await callBridge('getShareMeta');
+    if (meta.shareId && meta.userId) return meta;
+    try {
+      const res = await fetch(location.href, { credentials: 'include' });
+      const parsed = PanRelay.parseShareHtml(await res.text());
+      if (parsed?.shareId && parsed.userId) {
+        console.info('[PanRelay] 分享信息改从页面 HTML 解析');
+        return {
+          ...meta,
+          shareId: parsed.shareId,
+          userId: parsed.userId,
+          bdstoken: meta.bdstoken || parsed.bdstoken,
+          shareRoot: meta.shareRoot && meta.shareRoot !== '/' ? meta.shareRoot : parsed.shareRoot,
+          loginstate: meta.loginstate === '1' ? meta.loginstate : parsed.loginstate,
+        };
+      }
+    } catch (_) {
+      /* 保持原 meta，由引擎报「分享页信息不完整」 */
+    }
+    return meta;
+  }
+
+  async function runRelay(selection) {
+    const meta = await getShareMetaWithFallback();
     if (meta.loginstate !== '1' && meta.loginstate !== 1) {
       throw new Error('请先登录百度网盘账号');
     }

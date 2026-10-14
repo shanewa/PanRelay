@@ -97,7 +97,11 @@
       this.fetch = options.fetch || globalThis.fetch.bind(globalThis);
       this.onProgress = options.onProgress || (() => {});
       this.batchSize = options.batchSize || 500;
-      this.listPageSize = options.listPageSize || 60;
+      /** 纯文件批次遇到 errno 12 后自动减半，后续批次沿用 */
+      this.fileBatchSize = this.batchSize;
+      this.listPageSize = options.listPageSize || 100;
+      /** 已成功转存、或已开始拆分处理的 fs_id；批量失败退回逐个转存时据此跳过，避免 newcopy 产生重复副本 */
+      this.handledIds = new Set();
       this.maxRetries = options.maxRetries ?? 12;
       this.listMaxRetries = options.listMaxRetries ?? 10;
       this.transferCooldownMs = options.transferCooldownMs ?? 1500;
@@ -295,7 +299,13 @@
           this.recordFailure(directories[0].name, error);
           return;
         }
-        throw error;
+        const rest = directories.filter((d) => !this.handledIds.has(String(d.id)));
+        this.progress(
+          `批量转存 ${directories.length} 个目录失败（${error.message || error}），剩余 ${rest.length} 个改为逐个转存…`,
+        );
+        for (const dir of rest) {
+          await this.transferDirectoriesSafe([dir], destination, ancestry);
+        }
       }
     }
 
@@ -309,7 +319,8 @@
         'app_id=250528',
         'channel=chunlei',
         'clienttype=0',
-        'order=time',
+        // 按名称排序分页顺序确定；按时间排序遇到同一时刻的文件，翻页时可能重复或漏项
+        'order=name',
         'desc=0',
         'showempty=0',
         `page=${page}`,
@@ -466,8 +477,8 @@
         if (childDirs.length < batch.filter((c) => c.isDirectory).length) {
           this.progress('跳过与当前目录相同的结果，避免反复转存同一文件夹');
         }
-        for (const dir of childDirs) {
-          await this.transferDirectoriesSafe([dir], childDestination, ancestry);
+        if (childDirs.length) {
+          await this.transferDirectoriesSafe(childDirs, childDestination, ancestry);
         }
         if (childFiles.length) {
           await this.transferFiles(childFiles, childDestination);
@@ -481,19 +492,31 @@
     async transferFiles(files, destination) {
       if (!files.length) return;
       await this.createDirectory(destination);
-      for (let index = 0; index < files.length; index += this.batchSize) {
-        const batch = files.slice(index, index + this.batchSize);
-        await this.transferIds(batch.map((f) => f.id), destination);
-        this.progress(
-          `已转存文件 ${Math.min(index + batch.length, files.length)}/${files.length} → ${destination || '/'}`,
-        );
+      let index = 0;
+      while (index < files.length) {
+        const batch = files.slice(index, index + this.fileBatchSize);
+        try {
+          await this.transferIds(batch.map((f) => f.id), destination);
+        } catch (error) {
+          if (error.cancelled || error.errno !== 12 || batch.length === 1) throw error;
+          this.fileBatchSize = Math.max(1, Math.floor(batch.length / 2));
+          this.progress(
+            `每批 ${batch.length} 个文件超过转存限制，改为每批 ${this.fileBatchSize} 个继续…`,
+          );
+          continue;
+        }
+        for (const f of batch) this.handledIds.add(String(f.id));
+        index += batch.length;
+        this.progress(`已转存文件 ${index}/${files.length} → ${destination || '/'}`);
       }
     }
 
     async transferDirectories(directories, destination, ancestry = new Set()) {
       if (!directories.length) return;
       const seen = directories.filter((d) => ancestry.has(String(d.id)));
-      const pending = directories.filter((d) => !ancestry.has(String(d.id)));
+      const pending = directories.filter(
+        (d) => !ancestry.has(String(d.id)) && !this.handledIds.has(String(d.id)),
+      );
       if (seen.length) {
         this.progress(
           `跳过重复目录：${seen.map((d) => d.name).join('、')}`,
@@ -504,6 +527,7 @@
       try {
         await this.transferIds(pending.map((d) => d.id), destination);
         for (const item of pending) {
+          this.handledIds.add(String(item.id));
           this.progress(`已转存目录 ${destination || ''}/${item.name}`);
         }
       } catch (error) {
@@ -517,6 +541,7 @@
           return;
         }
         const directory = pending[0];
+        this.handledIds.add(String(directory.id));
         const next = new Set(ancestry);
         next.add(String(directory.id));
         const sourcePath = normalizeShareListPath(
@@ -526,13 +551,19 @@
         );
         this.progress(`列出分享目录：${sourcePath}`);
         const childDestination = joinPath(destination, directory.name);
-        await this.processShareDirectoryIncrementally(
-          sourcePath,
-          childDestination,
-          directory.shareDirRaw,
-          directory.id,
-          next,
-        );
+        try {
+          await this.processShareDirectoryIncrementally(
+            sourcePath,
+            childDestination,
+            directory.shareDirRaw,
+            directory.id,
+            next,
+          );
+        } catch (splitError) {
+          // 拆分过程中已有部分内容转存成功，不能再整体重试，只记失败
+          if (splitError.cancelled) throw splitError;
+          this.recordFailure(directory.name, splitError);
+        }
       }
     }
 
@@ -566,7 +597,7 @@
         throw new PanRelayError('请至少选择一个文件或文件夹');
       }
       this.progress(`开始接力转存到 ${dest}（每批最多 ${this.batchSize} 个文件）…`);
-      if (directories.length) await this.transferDirectories(directories, dest);
+      if (directories.length) await this.transferDirectoriesSafe(directories, dest, new Set());
       if (files.length) await this.transferFiles(files, dest);
       this.finish();
     }
@@ -596,8 +627,61 @@
     }
   }
 
+  function readBalancedJson(text, start) {
+    let depth = 0;
+    let inString = false;
+    for (let i = start; i < text.length; i++) {
+      const ch = text[i];
+      if (inString) {
+        if (ch === '\\') i += 1;
+        else if (ch === '"') inString = false;
+      } else if (ch === '"') inString = true;
+      else if (ch === '{') depth += 1;
+      else if (ch === '}' && --depth === 0) return text.slice(start, i + 1);
+    }
+    return '';
+  }
+
+  /**
+   * 从分享页 HTML 解析分享信息，不依赖页面全局变量：
+   * 新版 `<script id="locals-data" type="application/json">`，旧版 `locals.mset({...})`。
+   */
+  function parseShareHtml(html) {
+    const text = String(html || '');
+    let data = null;
+    const v2 = text.match(/<script[^>]*id="locals-data"[^>]*>([\s\S]*?)<\/script>/i);
+    if (v2) {
+      try {
+        data = JSON.parse(v2[1].trim());
+      } catch (_) {
+        data = null;
+      }
+    }
+    if (!data) {
+      const at = text.indexOf('locals.mset(');
+      const start = at >= 0 ? text.indexOf('{', at) : -1;
+      const json = start >= 0 ? readBalancedJson(text, start) : '';
+      try {
+        data = json ? JSON.parse(json) : null;
+      } catch (_) {
+        data = null;
+      }
+    }
+    if (!data || data.shareid == null) return null;
+    const fileList = Array.isArray(data.file_list) ? data.file_list : [];
+    return {
+      shareId: String(data.shareid || ''),
+      userId: String(data.share_uk || ''),
+      bdstoken: String(data.bdstoken || ''),
+      shareRoot: decodePath(fileList[0]?.parent_path || '/') || '/',
+      loginstate: String(data.loginstate ?? '0'),
+      fileList,
+    };
+  }
+
   root.PanRelay = {
     PanRelayError,
     ShareTransferEngine,
+    parseShareHtml,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : window);
