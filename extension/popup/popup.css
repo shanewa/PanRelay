@@ -471,8 +471,24 @@ input[type='range'] {
 /* ---------- footer + contact ---------- */
 
 .foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
   margin: 10px 2px 0;
-  text-align: center;
+}
+
+.foot-version:not(:empty)::before {
+  content: '·';
+  margin-right: 8px;
+  opacity: 0.5;
+}
+
+.foot-version {
+  font-family: var(--num);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--slate);
 }
 
 .linklike {

@@ -196,6 +196,8 @@ oaQrEl.addEventListener('click', () => {
   window.open(oaQrEl.src, '_blank');
 });
 
+document.getElementById('appVersion').textContent = `v${chrome.runtime.getManifest().version}`;
+
 const contactLinkEl = document.getElementById('contactLink');
 const contactOverlayEl = document.getElementById('contactOverlay');
 const contactCloseEl = document.getElementById('contactClose');
