@@ -35,6 +35,60 @@
   color: #7dd3fc;
 }
 
+#panrelay-panel .panrelay-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+#panrelay-panel .panrelay-toggle {
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: #bae6fd;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#panrelay-panel .panrelay-toggle:hover {
+  background: rgba(56, 189, 248, 0.22);
+}
+
+#panrelay-panel .panrelay-toggle:focus-visible,
+#panrelay-panel .panrelay-cancel:focus-visible {
+  outline: 2px solid #7dd3fc;
+  outline-offset: 2px;
+}
+
+#panrelay-panel.is-collapsed {
+  width: 240px;
+}
+
+#panrelay-panel.is-collapsed .panrelay-status,
+#panrelay-panel.is-collapsed .panrelay-log,
+#panrelay-panel.is-collapsed .panrelay-progress-count {
+  display: none;
+}
+
+#panrelay-panel.is-collapsed .panrelay-panel-inner {
+  padding: 10px 12px;
+}
+
+#panrelay-panel.is-collapsed .panrelay-header {
+  margin-bottom: 0;
+}
+
+#panrelay-panel.is-collapsed .panrelay-progress {
+  margin: 8px 0 0;
+}
+
+#panrelay-panel.is-collapsed .panrelay-progress-pct {
+  font-size: 16px;
+}
+
 #panrelay-panel .panrelay-cancel {
   flex-shrink: 0;
   padding: 3px 12px;

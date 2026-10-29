@@ -82,7 +82,10 @@
       '<div class="panrelay-panel-inner">' +
       '<div class="panrelay-header">' +
       '<div class="panrelay-title">PanRelay 接力转存</div>' +
+      '<div class="panrelay-actions">' +
       '<button type="button" class="panrelay-cancel" hidden>取消</button>' +
+      '<button type="button" class="panrelay-toggle" aria-expanded="true"></button>' +
+      '</div>' +
       '</div>' +
       '<div class="panrelay-progress" hidden>' +
       '<div class="panrelay-progress-meta">' +
@@ -97,8 +100,36 @@
       '<div class="panrelay-log"></div>' +
       '</div>';
     panelEl.querySelector('.panrelay-cancel').addEventListener('click', onCancelClick);
+    panelEl.querySelector('.panrelay-toggle').addEventListener('click', () => {
+      setPanelCollapsed(!panelEl.classList.contains('is-collapsed'));
+    });
     document.documentElement.appendChild(panelEl);
+    setPanelCollapsed(readCollapsedPref());
     return panelEl;
+  }
+
+  const COLLAPSED_KEY = 'panrelay-panel-collapsed';
+
+  function readCollapsedPref() {
+    try {
+      return localStorage.getItem(COLLAPSED_KEY) === '1';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /** 收起后只留标题和进度条，不挡页面 */
+  function setPanelCollapsed(collapsed) {
+    panelEl.classList.toggle('is-collapsed', collapsed);
+    const btn = panelEl.querySelector('.panrelay-toggle');
+    btn.textContent = collapsed ? '展开' : '收起';
+    btn.setAttribute('aria-expanded', String(!collapsed));
+    btn.title = collapsed ? '展开转存详情' : '收起到角落，进度仍可见';
+    try {
+      localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
+    } catch (_) {
+      /* 存不了就只在本页生效 */
+    }
   }
 
   function setCancelVisible(visible) {
