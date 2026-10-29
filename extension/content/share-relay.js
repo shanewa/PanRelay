@@ -29,6 +29,7 @@
   /** 小批量交还给百度原生保存时，放行下一次程序触发的点击 */
   let passThroughTarget = null;
   let lastUserClickAt = 0;
+  let lastStats = { done: 0, total: 0, estimating: true };
 
   chrome.storage.sync.get(DEFAULTS, (stored) => {
     settings = { ...DEFAULTS, ...stored };
@@ -83,6 +84,15 @@
       '<div class="panrelay-title">PanRelay 接力转存</div>' +
       '<button type="button" class="panrelay-cancel" hidden>取消</button>' +
       '</div>' +
+      '<div class="panrelay-progress" hidden>' +
+      '<div class="panrelay-progress-meta">' +
+      '<span class="panrelay-progress-pct"></span>' +
+      '<span class="panrelay-progress-count"></span>' +
+      '</div>' +
+      '<div class="panrelay-progress-track" role="progressbar" aria-label="转存进度" aria-valuemin="0" aria-valuemax="100">' +
+      '<div class="panrelay-progress-fill"></div>' +
+      '</div>' +
+      '</div>' +
       '<div class="panrelay-status">就绪</div>' +
       '<div class="panrelay-log"></div>' +
       '</div>';
@@ -110,6 +120,49 @@
   function setPanelStatus(text) {
     const panel = ensurePanel();
     panel.querySelector('.panrelay-status').textContent = text;
+  }
+
+  const formatCount = (n) => n.toLocaleString('zh-CN');
+
+  /** state: running | done | partial | cancelled */
+  function renderProgress(stats, state = 'running') {
+    const box = ensurePanel().querySelector('.panrelay-progress');
+    const pctEl = box.querySelector('.panrelay-progress-pct');
+    const countEl = box.querySelector('.panrelay-progress-count');
+    const track = box.querySelector('.panrelay-progress-track');
+    const fill = box.querySelector('.panrelay-progress-fill');
+    box.hidden = false;
+    const measuring = state === 'running' && (stats.estimating || !stats.total);
+    box.dataset.state = measuring ? 'measuring' : state;
+    if (measuring) {
+      pctEl.textContent = '统计中';
+      countEl.textContent = stats.done ? `已转存 ${formatCount(stats.done)} 个文件` : '正在计算文件总数…';
+      fill.style.width = '';
+      track.removeAttribute('aria-valuenow');
+      return;
+    }
+    if (!stats.total && state !== 'done') {
+      pctEl.textContent = '—';
+      countEl.textContent = '';
+      fill.style.width = '0%';
+      return;
+    }
+    const ratio = stats.total ? stats.done / stats.total : 1;
+    // 估算值不到最后不显示 100%
+    const pct = state === 'running' ? Math.min(99, Math.floor(ratio * 100)) : Math.round(ratio * 100);
+    pctEl.textContent = `${pct}%`;
+    countEl.textContent =
+      state === 'done'
+        ? `共 ${formatCount(stats.total)} 个文件`
+        : `约 ${formatCount(stats.done)} / ${formatCount(stats.total)} 个文件`;
+    fill.style.width = `${Math.max(2, pct)}%`;
+    track.setAttribute('aria-valuenow', String(pct));
+  }
+
+  function resetProgress() {
+    const box = ensurePanel().querySelector('.panrelay-progress');
+    box.hidden = true;
+    box.querySelector('.panrelay-progress-fill').style.width = '';
   }
 
   function clearLog() {
@@ -189,6 +242,10 @@
       onProgress: (msg) => {
         setPanelStatus(msg);
         appendLog(msg);
+      },
+      onStats: (stats) => {
+        lastStats = stats;
+        if (!stats.finished) renderProgress(stats);
       },
     }));
     if (selection.selectAllDir) {
@@ -371,17 +428,23 @@
         ? '百度提示超出转存上限，已关闭弹窗，改由 PanRelay 分批转存'
         : '已接管「保存到网盘」',
     );
+    resetProgress();
+    lastStats = { done: 0, total: 0, estimating: true };
+    renderProgress(lastStats);
 
     try {
       await runRelay(selection);
       setPanelStatus('完成');
+      renderProgress(lastStats, 'done');
     } catch (error) {
       if (error.cancelled) {
         setPanelStatus('已取消');
         appendLog('已取消。已转存的部分会保留在你的网盘里。');
+        renderProgress(lastStats, 'cancelled');
       } else {
         setPanelStatus('失败');
         appendLog(error.message || String(error));
+        renderProgress(lastStats, 'partial');
       }
     }
   }

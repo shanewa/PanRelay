@@ -60,6 +60,115 @@
   display: none;
 }
 
+#panrelay-panel .panrelay-progress {
+  --pr-fill-a: #0ea5e9;
+  --pr-fill-b: #7dd3fc;
+  margin: 4px 0 10px;
+}
+
+#panrelay-panel .panrelay-progress[hidden] {
+  display: none;
+}
+
+#panrelay-panel .panrelay-progress-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+#panrelay-panel .panrelay-progress-pct {
+  font-family: Bahnschrift, 'DIN Alternate', 'Segoe UI', sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  color: #f1f5f9;
+}
+
+#panrelay-panel .panrelay-progress[data-state='measuring'] .panrelay-progress-pct {
+  font-size: 14px;
+  color: #7dd3fc;
+}
+
+#panrelay-panel .panrelay-progress-count {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#panrelay-panel .panrelay-progress-track {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  background: rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+}
+
+#panrelay-panel .panrelay-progress-fill {
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, var(--pr-fill-a), var(--pr-fill-b));
+  border-radius: inherit;
+  box-shadow: 0 0 10px rgba(125, 211, 252, 0.55);
+  transition: width 0.5s ease;
+}
+
+/* 还不知道文件总数：整条斜纹流动，表示在动但不假装有百分比 */
+#panrelay-panel .panrelay-progress[data-state='measuring'] .panrelay-progress-fill {
+  width: 100%;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(125, 211, 252, 0.55) 0 8px,
+    rgba(14, 165, 233, 0.18) 8px 16px
+  );
+  background-size: 22.6px 22.6px;
+  box-shadow: none;
+  animation: panrelay-stripes 0.9s linear infinite;
+}
+
+#panrelay-panel .panrelay-progress[data-state='done'] {
+  --pr-fill-a: #10b981;
+  --pr-fill-b: #6ee7b7;
+}
+
+#panrelay-panel .panrelay-progress[data-state='partial'] {
+  --pr-fill-a: #f59e0b;
+  --pr-fill-b: #fcd34d;
+}
+
+#panrelay-panel .panrelay-progress[data-state='cancelled'] {
+  --pr-fill-a: #64748b;
+  --pr-fill-b: #94a3b8;
+}
+
+#panrelay-panel .panrelay-progress[data-state='done'] .panrelay-progress-fill,
+#panrelay-panel .panrelay-progress[data-state='partial'] .panrelay-progress-fill,
+#panrelay-panel .panrelay-progress[data-state='cancelled'] .panrelay-progress-fill {
+  box-shadow: none;
+}
+
+@keyframes panrelay-stripes {
+  to {
+    background-position: 22.6px 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #panrelay-panel .panrelay-progress-fill {
+    transition: none;
+  }
+
+  #panrelay-panel .panrelay-progress[data-state='measuring'] .panrelay-progress-fill {
+    animation: none;
+  }
+}
+
 #panrelay-panel .panrelay-status {
   margin-bottom: 8px;
   line-height: 1.45;

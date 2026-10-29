@@ -222,6 +222,18 @@ errno **`12`**：单次数量超限，向上抛给拆分逻辑。
 
 按 `fileBatchSize`（初始为 `batchSize`，默认 500）切片调用 `transferIds`。遇 errno 12 自动减半并重试当前批，减半后的批量对后续批次继续生效。
 
+#### 进度：`stats` / `onStats`
+
+百度不提供分享目录的递归文件数，进度按文件数估算：
+
+- 总数来自 errno 12 响应的 `target_file_nums`（这一批的真实文件数）；选中的散文件各算 1。
+- 二分拆分时，组的份额（budget）按目录个数分给两半；单目录拆开后，本页子目录分到「剩余份额 − 本页文件数」（本页满 100 条时先给一半，留给后续页）。
+- 子组 errno 12 拿到真实数时调整总数；单目录处理完以它自己的数为准，把内部调整收回、没用完的份额补进进度，所以结束时总数等于真实文件数。
+- `stats.unknown > 0`（还有不知道文件数的目录组，例如子目录内全选）时 `estimating: true`，面板只显示「统计中」斜纹，不给百分比。
+- `finish()` 把进度补到 100%；运行中最多显示 99%。
+
+`share-relay.js` 的 `renderProgress` 画面板进度条：运行中天蓝、完成绿色、部分失败琥珀、取消灰色。`node scripts/test-transfer-engine.cjs` 用假接口验证拆分、去重与进度。
+
 #### 分享元数据兜底：`parseShareHtml(html)`
 
 页面桥拿不到 `shareId` / `uk` 时，`share-relay.js` 重新 `fetch(location.href)`，先解析新版 `<script id="locals-data">` JSON，再解析旧版 `locals.mset({...})`。

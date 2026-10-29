@@ -96,6 +96,12 @@
     constructor(options = {}) {
       this.fetch = options.fetch || globalThis.fetch.bind(globalThis);
       this.onProgress = options.onProgress || (() => {});
+      this.onStats = options.onStats || (() => {});
+      /**
+       * 进度按文件数估算：总数来自 errno 12 响应里的 target_file_nums，拆分后各部分按比例分摊、
+       * 子目录处理完再按实际用量校正。unknown 为仍不知道文件数的目录组个数，> 0 时只能显示「统计中」。
+       */
+      this.stats = { done: 0, total: 0, unknown: 0 };
       this.batchSize = options.batchSize || 500;
       /** 纯文件批次遇到 errno 12 后自动减半，后续批次沿用 */
       this.fileBatchSize = this.batchSize;
@@ -119,6 +125,33 @@
 
     progress(message) {
       this.onProgress(String(message));
+    }
+
+    emitStats(finished = false) {
+      const { done, total, unknown } = this.stats;
+      this.onStats({
+        done: Math.round(Math.min(done, total)),
+        total: Math.round(total),
+        estimating: unknown > 0,
+        finished,
+      });
+    }
+
+    credit(n) {
+      if (!(n > 0)) return;
+      this.stats.done += n;
+      this.emitStats();
+    }
+
+    grow(n) {
+      if (!n) return;
+      this.stats.total = Math.max(0, this.stats.total + n);
+      this.emitStats();
+    }
+
+    setUnknown(delta) {
+      this.stats.unknown = Math.max(0, this.stats.unknown + delta);
+      this.emitStats();
     }
 
     /** 已发出的转存请求可能仍会在服务端完成，取消只保证不再发新请求 */
@@ -289,10 +322,11 @@
       this.progress(`失败（已跳过，可稍后单独重试）：${name} — ${message}`);
     }
 
-    async transferDirectoriesSafe(directories, destination, ancestry) {
+    /** budget：这组目录估计的文件数，null 表示未知 */
+    async transferDirectoriesSafe(directories, destination, ancestry, budget = null) {
       if (!directories.length) return;
       try {
-        await this.transferDirectories(directories, destination, ancestry);
+        await this.transferDirectories(directories, destination, ancestry, budget);
       } catch (error) {
         if (error.cancelled) throw error;
         if (directories.length === 1) {
@@ -303,8 +337,9 @@
         this.progress(
           `批量转存 ${directories.length} 个目录失败（${error.message || error}），剩余 ${rest.length} 个改为逐个转存…`,
         );
+        const each = budget == null ? null : budget / directories.length;
         for (const dir of rest) {
-          await this.transferDirectoriesSafe([dir], destination, ancestry);
+          await this.transferDirectoriesSafe([dir], destination, ancestry, each);
         }
       }
     }
@@ -463,7 +498,9 @@
       shareDirRaw,
       fid,
       ancestry,
+      budget = null,
     ) {
+      const doneBefore = this.stats.done;
       await this.createDirectory(childDestination);
       await this.wait(Math.max(800, Math.min(2000, this.transferCooldownMs)));
       for (let page = 1; ; page += 1) {
@@ -489,8 +526,16 @@
         if (childDirs.length < batch.filter((c) => c.isDirectory).length) {
           this.progress('跳过与当前目录相同的结果，避免反复转存同一文件夹');
         }
+        let dirsBudget = null;
+        if (budget == null) {
+          this.grow(childFiles.length);
+        } else {
+          const left = Math.max(0, budget - (this.stats.done - doneBefore) - childFiles.length);
+          // 本页满了说明可能还有下一页，先只分一半给本页子目录，剩下留给后面
+          dirsBudget = batch.length < pageSize ? left : left / 2;
+        }
         if (childDirs.length) {
-          await this.transferDirectoriesSafe(childDirs, childDestination, ancestry);
+          await this.transferDirectoriesSafe(childDirs, childDestination, ancestry, dirsBudget);
         }
         if (childFiles.length) {
           await this.transferFiles(childFiles, childDestination);
@@ -518,12 +563,13 @@
           continue;
         }
         for (const f of batch) this.handledIds.add(String(f.id));
+        this.credit(batch.length);
         index += batch.length;
         this.progress(`已转存文件 ${index}/${files.length} → ${destination || '/'}`);
       }
     }
 
-    async transferDirectories(directories, destination, ancestry = new Set()) {
+    async transferDirectories(directories, destination, ancestry = new Set(), budget = null) {
       if (!directories.length) return;
       const seen = directories.filter((d) => ancestry.has(String(d.id)));
       const pending = directories.filter(
@@ -534,7 +580,14 @@
           `跳过重复目录：${seen.map((d) => d.name).join('、')}`,
         );
       }
+      if (budget != null && pending.length < directories.length) {
+        const kept = (budget * pending.length) / directories.length;
+        this.credit(budget - kept);
+        budget = kept;
+      }
       if (!pending.length) return;
+      const unknown = budget == null;
+      if (unknown) this.setUnknown(1);
       await this.createDirectory(destination);
       try {
         await this.transferIds(pending.map((d) => d.id), destination);
@@ -542,14 +595,30 @@
           this.handledIds.add(String(item.id));
           this.progress(`已转存目录 ${destination || ''}/${item.name}`);
         }
+        if (unknown) {
+          // 一次就转成功，百度不会告诉文件数，按目录个数记
+          this.grow(pending.length);
+          this.credit(pending.length);
+          this.setUnknown(-1);
+        } else {
+          this.credit(budget);
+        }
       } catch (error) {
+        if (unknown) this.setUnknown(-1);
         if (error.cancelled) throw error;
         if (error.errno !== 12) throw error;
+        const exact = Number(error.response?.target_file_nums) || 0;
+        if (exact) {
+          this.grow(exact - (unknown ? 0 : budget));
+          budget = exact;
+        }
         this.progress(`目录过大，正在拆分：${pending.map((d) => d.name).join('、')}`);
         if (pending.length > 1) {
           const middle = Math.floor(pending.length / 2);
-          await this.transferDirectories(pending.slice(0, middle), destination, ancestry);
-          await this.transferDirectories(pending.slice(middle), destination, ancestry);
+          const leftBudget = budget == null ? null : (budget * middle) / pending.length;
+          const rightBudget = budget == null ? null : budget - leftBudget;
+          await this.transferDirectories(pending.slice(0, middle), destination, ancestry, leftBudget);
+          await this.transferDirectories(pending.slice(middle), destination, ancestry, rightBudget);
           return;
         }
         const directory = pending[0];
@@ -563,6 +632,8 @@
         );
         this.progress(`列出分享目录：${sourcePath}`);
         const childDestination = joinPath(destination, directory.name);
+        const doneBefore = this.stats.done;
+        const totalBefore = this.stats.total;
         try {
           await this.processShareDirectoryIncrementally(
             sourcePath,
@@ -570,11 +641,19 @@
             directory.shareDirRaw,
             directory.id,
             next,
+            budget,
           );
         } catch (splitError) {
           // 拆分过程中已有部分内容转存成功，不能再整体重试，只记失败
           if (splitError.cancelled) throw splitError;
           this.recordFailure(directory.name, splitError);
+        }
+        if (budget != null) {
+          // 目录处理完以本目录的数为准：子项估算偏差在内部调过的总数收回，没用完的份额补进进度
+          const used = this.stats.done - doneBefore;
+          const grownInside = this.stats.total - totalBefore;
+          this.grow(Math.max(0, used - budget) - grownInside);
+          if (used < budget) this.credit(budget - used);
         }
       }
     }
@@ -609,6 +688,7 @@
         throw new PanRelayError('请至少选择一个文件或文件夹');
       }
       this.progress(`开始接力转存到 ${dest}（每批最多 ${this.batchSize} 个文件）…`);
+      this.grow(files.length);
       if (directories.length) await this.transferDirectoriesSafe(directories, dest, new Set());
       if (files.length) await this.transferFiles(files, dest);
       this.finish();
@@ -624,11 +704,16 @@
       this.failedTasks = [];
       const source = normalizeShareListPath(sharePath, sharePath, this.shareRoot);
       this.progress(`开始接力转存「${source}」里的全部内容到 ${dest}（每批最多 ${this.batchSize} 个文件）…`);
+      // 整个目录的文件数事先不知道，全程显示「统计中」
+      this.setUnknown(1);
       await this.processShareDirectoryIncrementally(source, dest, sharePath, null, new Set());
       this.finish();
     }
 
     finish() {
+      this.stats.unknown = 0;
+      this.stats.done = this.stats.total;
+      this.emitStats(true);
       if (this.failedTasks.length) {
         const names = this.failedTasks.map((t) => t.name).join('、');
         throw new PanRelayError(
