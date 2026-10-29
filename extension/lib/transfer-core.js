@@ -634,13 +634,20 @@
       } catch (error) {
         if (unknown) this.setUnknown(-1);
         if (error.cancelled) throw error;
-        if (error.errno !== 12) throw error;
+        if (error.errno !== 12) {
+          if (!this.splitOnError(error, pending)) throw error;
+          this.progress(
+            `目录整体转存失败（${error.message}），改为进入目录分批转存：${pending[0].name}`,
+          );
+        }
         const exact = Number(error.response?.target_file_nums) || 0;
         if (exact) {
           this.grow(exact - (unknown ? 0 : budget));
           budget = exact;
         }
-        this.progress(`目录过大，正在拆分：${pending.map((d) => d.name).join('、')}`);
+        if (error.errno === 12) {
+          this.progress(`目录过大，正在拆分：${pending.map((d) => d.name).join('、')}`);
+        }
         if (pending.length > 1) {
           const middle = Math.floor(pending.length / 2);
           const leftBudget = budget == null ? null : (budget * middle) / pending.length;
@@ -684,6 +691,11 @@
           if (used < budget) this.credit(budget - used);
         }
       }
+    }
+
+    /** 非超限错误时，单个目录是否仍改为进入目录逐层转存 */
+    splitOnError() {
+      return false;
     }
 
     normalizeSelection(selected) {
@@ -740,7 +752,8 @@
 
     finish() {
       this.stats.unknown = 0;
-      this.stats.done = this.stats.total;
+      // 有失败项时不能拉满，否则面板显示 100% 却提示失败
+      if (!this.failedTasks.length) this.stats.done = this.stats.total;
       this.emitStats(true);
       if (this.failedTasks.length) {
         const names = this.failedTasks.map((t) => t.name).join('、');
@@ -765,6 +778,11 @@
       this.idsKey = options.idsKey || 'fs_ids';
       this.listPath = options.listPath || '/mbox/msg/shareinfo';
       this.listParams = options.listParams || {};
+    }
+
+    // 群文件接口对大目录不一定回超限码：几个目录一起转回 130，单个大目录却回 2148 等，统一进入目录再拆
+    splitOnError(error, pending) {
+      return pending.length === 1 && Number(error.errno) > 0;
     }
 
     async sendTransfer(ids, destination) {

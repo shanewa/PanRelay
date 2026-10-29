@@ -244,8 +244,8 @@ const sel = (n) => ({ fs_id: n.id, isdir: n.isdir, server_filename: n.name, path
         bodies.push(body);
         const ids = JSON.parse(body.get('fs_ids'));
         const total = ids.reduce((s, id) => s + countFiles(t.byId.get(id)), 0);
-        // 群文件超限实测回 errno 130，不是分享页的 12
-        if (total > 500) return respond({ errno: 130 });
+        // 实测：多个目录一起超限回 130；单个大目录回 2148，都不是分享页的 12
+        if (total > 500) return respond({ errno: ids.length > 1 ? 130 : 2148 });
         for (const id of ids) transferred.set(id, (transferred.get(id) || 0) + 1);
         return respond({ errno: 0 });
       }
@@ -276,7 +276,7 @@ const sel = (n) => ({ fs_id: n.id, isdir: n.isdir, server_filename: n.name, path
     const keptParams = bodies.every((b) => b.get('gid') === 'g1' && b.get('msg_id') === 'm1' && b.get('type') === '2');
     const dest = bodies.filter((b) => b.get('path').startsWith('/我的/学习/课程')).length;
     check(
-      '群文件：沿用原请求参数、按 has_more 翻页、子目录各转一次',
+      '群文件：单个大目录回 2148 也进入拆分，沿用原请求参数、按 has_more 翻页、子目录各转一次',
       !error && once && keptParams && dest > 0,
       `error=${error && error.message} subsOnce=${once} params=${keptParams} requests=${bodies.length}`,
     );
