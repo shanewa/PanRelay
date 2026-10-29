@@ -90,6 +90,8 @@
       transferQuery: url.search.replace(/^\?/, ''),
       transferBody: body,
       idsKey: detail.idsKey,
+      // 群文件超限的 errno 与分享页的 12 不同（实测 130），以页面这次拿到的为准
+      limitErrnos: [Number(detail.response?.errno || detail.response?.task_errno || 0)].filter(Boolean),
       listPath: detail.listPath || '/mbox/msg/shareinfo',
       listParams: { from_uk: body.from_uk, msg_id: body.msg_id, gid, type: '2' },
       bdstoken: url.searchParams.get('bdstoken') || body.bdstoken || '',
@@ -154,7 +156,7 @@
       return;
     }
     if (!detail?.ids?.length || !settings.enabled) return;
-    console.info('[PanRelay] 接手群文件转存', detail);
+    console.info(`[PanRelay] 接手群文件转存 ${JSON.stringify(detail)}`);
     if (!settings.unlocked) {
       PanRelayUnlockGuide.showGuide({ force: true });
       return;

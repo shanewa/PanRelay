@@ -244,13 +244,15 @@ const sel = (n) => ({ fs_id: n.id, isdir: n.isdir, server_filename: n.name, path
         bodies.push(body);
         const ids = JSON.parse(body.get('fs_ids'));
         const total = ids.reduce((s, id) => s + countFiles(t.byId.get(id)), 0);
-        if (total > 500) return respond({ errno: 12, target_file_nums: total, target_file_nums_limit: 500 });
+        // 群文件超限实测回 errno 130，不是分享页的 12
+        if (total > 500) return respond({ errno: 130 });
         for (const id of ids) transferred.set(id, (transferred.get(id) || 0) + 1);
         return respond({ errno: 0 });
       }
       throw new Error(`unexpected ${url}`);
     };
     const e = new GroupTransferEngine({
+      limitErrnos: [130],
       fetch,
       fromUk: 'u1',
       msgId: 'm1',
@@ -296,6 +298,7 @@ const sel = (n) => ({ fs_id: n.id, isdir: n.isdir, server_filename: n.name, path
         (this.listeners.load || []).forEach((fn) => fn());
       }
     }
+    FakeXHR.prototype.responseType = '';
     FakeXHR.prototype.open = function () {};
     FakeXHR.prototype.send = function () {};
     const saved = {};
@@ -328,7 +331,16 @@ const sel = (n) => ({ fs_id: n.id, isdir: n.isdir, server_filename: n.name, path
     const tr = new FakeXHR();
     tr.open('POST', '/mbox/msg/transfer?bdstoken=tok&channel=chunlei');
     tr.send('from_uk=u1&msg_id=m1&gid=g1&type=2&path=%2F%E5%AD%A6%E4%B9%A0&fs_ids=%5B815453071125924%5D');
-    tr.respond(JSON.stringify({ errno: 12, show_msg: '转存文件数超过上限' }));
+    // 页面用 responseType=json，读 responseText 会抛错，只能读 response
+    tr.responseType = 'json';
+    Object.defineProperty(tr, 'responseText', {
+      get() {
+        throw new Error("InvalidStateError: responseType is 'json'");
+      },
+      set() {},
+    });
+    tr.response = { errno: 130, show_msg: '转存文件数超过上限' };
+    (tr.listeners.load || []).forEach((fn) => fn());
 
     for (const [k, v] of Object.entries(saved)) {
       if (v === undefined) delete globalThis[k];

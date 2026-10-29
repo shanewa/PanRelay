@@ -97,6 +97,8 @@
       this.fetch = options.fetch || globalThis.fetch.bind(globalThis);
       this.onProgress = options.onProgress || (() => {});
       this.onStats = options.onStats || (() => {});
+      /** 除 12 以外也按「单次数量超限」处理的 errno（群文件接口用的码不同） */
+      this.limitErrnos = new Set((options.limitErrnos || []).map(Number));
       /**
        * 进度按文件数估算：总数来自 errno 12 响应里的 target_file_nums，拆分后各部分按比例分摊、
        * 子目录处理完再按实际用量校正。unknown 为仍不知道文件数的目录组个数，> 0 时只能显示「统计中」。
@@ -305,12 +307,12 @@
     async transferIds(ids, destination, retry = 0) {
       const data = await this.waitTransferTask(await this.sendTransfer(ids, destination));
       const errno = Number(data?.errno || 0);
-      const errMsg = data?.show_msg || data?.errmsg || '';
+      const errMsg = data?.show_msg || data?.errmsg || data?.error_msg || data?.msg || '';
       if (errno === 0) {
         if (this.transferCooldownMs > 0) await this.wait(this.transferCooldownMs);
         return data;
       }
-      if (isTransferLimitError(errno, errMsg)) {
+      if (isTransferLimitError(errno, errMsg) || this.limitErrnos.has(errno)) {
         const limit = data.target_file_nums_limit;
         const count = data.target_file_nums;
         throw new PanRelayError(

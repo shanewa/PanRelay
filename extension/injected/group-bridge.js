@@ -143,7 +143,7 @@
       return;
     }
     if (TRANSFER_RE.test(url)) {
-      console.info('[PanRelay] 群文件转存', { url, body: request.body, response: data });
+      console.info(`[PanRelay] 群文件转存 ${JSON.stringify({ url, body: request.body, response: data })}`);
       const taskId = data && (data.task_id || data.taskid);
       if (taskId && !Number(data.errno || 0)) {
         pendingTasks.set(String(taskId), request);
@@ -177,7 +177,10 @@
       const request = { url, body: bodyToString(body) };
       this.addEventListener('load', () => {
         try {
-          onResponse(request, this.responseText);
+          // responseType 为 json 时读 responseText 会抛 InvalidStateError
+          const text =
+            this.responseType === 'json' ? JSON.stringify(this.response) : this.responseText;
+          onResponse(request, text);
         } catch (error) {
           console.warn('[PanRelay] 群文件响应处理失败', error);
         }
