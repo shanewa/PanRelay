@@ -267,9 +267,10 @@
       });
     }
 
-    async transferIds(ids, destination, retry = 0) {
+    /** 发一次转存请求，返回百度的原始响应 */
+    async sendTransfer(ids, destination) {
       await this.ensureBdstoken();
-      const data = await this.request('/share/transfer', {
+      return this.request('/share/transfer', {
         method: 'POST',
         query: [
           `shareid=${encodeURIComponent(this.shareId)}`,
@@ -280,6 +281,29 @@
         ].join('&'),
         body: `fsidlist=${encodeURIComponent(JSON.stringify(ids))}&path=${encodeURIComponent(destination || '/')}`,
       });
+    }
+
+    /** 异步转存返回 task_id 时轮询 /share/taskquery，把任务结果折算成与同步接口一样的 errno */
+    async waitTransferTask(data) {
+      const taskId = data?.task_id || data?.taskid;
+      if (!taskId || Number(data?.errno || 0) !== 0) return data;
+      for (let i = 0; i < 120; i++) {
+        await this.wait(i < 5 ? 1000 : 2000);
+        const task = await this.request('/share/taskquery', {
+          query: `taskid=${encodeURIComponent(taskId)}&bdstoken=${encodeURIComponent(this.bdstoken)}`,
+        });
+        const status = String(task?.status || '');
+        if (status === 'success') return { ...task, errno: 0 };
+        if (status === 'failed') {
+          return { ...task, errno: Number(task.task_errno || task.errno || -1) || -1 };
+        }
+        if (task && Number(task.errno || 0) !== 0) return task;
+      }
+      return { errno: -1, show_msg: '转存任务长时间未完成' };
+    }
+
+    async transferIds(ids, destination, retry = 0) {
+      const data = await this.waitTransferTask(await this.sendTransfer(ids, destination));
       const errno = Number(data?.errno || 0);
       const errMsg = data?.show_msg || data?.errmsg || '';
       if (errno === 0) {
@@ -505,13 +529,15 @@
       await this.wait(Math.max(800, Math.min(2000, this.transferCooldownMs)));
       for (let page = 1; ; page += 1) {
         this.progress(`读取分享目录第 ${page} 页：${sourcePath}`);
-        const { items: batch, pageSize } = await this.fetchShareListPage(
+        const { items: batch, pageSize, hasMore } = await this.fetchShareListPage(
           sourcePath,
           page,
           shareDirRaw,
           fid,
         );
         if (!batch.length) break;
+        // 群文件接口会明确给 has_more，且一页不满也可能还有下一页
+        const lastPage = hasMore == null ? batch.length < pageSize : !hasMore;
         for (const item of batch) {
           if (!/sharelink/i.test(item.sharePath || '') && /sharelink/i.test(sourcePath)) {
             item.sharePath = joinPath(sourcePath, item.name);
@@ -532,7 +558,7 @@
         } else {
           const left = Math.max(0, budget - (this.stats.done - doneBefore) - childFiles.length);
           // 本页满了说明可能还有下一页，先只分一半给本页子目录，剩下留给后面
-          dirsBudget = batch.length < pageSize ? left : left / 2;
+          dirsBudget = lastPage ? left : left / 2;
         }
         if (childDirs.length) {
           await this.transferDirectoriesSafe(childDirs, childDestination, ancestry, dirsBudget);
@@ -541,7 +567,7 @@
           await this.transferFiles(childFiles, childDestination);
         }
 
-        if (batch.length < pageSize) break;
+        if (lastPage) break;
         await this.wait(600);
       }
     }
@@ -724,6 +750,77 @@
     }
   }
 
+  /**
+   * 群文件库转存：沿用页面自己发出的那次转存请求（接口、群 id、消息 id、目标路径），只换文件 id；
+   * 列子目录走群文件的 shareinfo 接口（按目录 fs_id 翻页）。
+   */
+  class GroupTransferEngine extends ShareTransferEngine {
+    constructor(options = {}) {
+      super({ ...options, shareId: options.msgId, userId: options.fromUk, shareRoot: '' });
+      this.transferPath = options.transferPath;
+      this.transferQuery = options.transferQuery || '';
+      this.transferBody = options.transferBody || {};
+      this.idsKey = options.idsKey || 'fs_ids';
+      this.listPath = options.listPath || '/mbox/msg/shareinfo';
+      this.listParams = options.listParams || {};
+    }
+
+    async sendTransfer(ids, destination) {
+      await this.ensureBdstoken();
+      const body = new URLSearchParams(this.transferBody);
+      // 原样拼数字，避免超长 fs_id 经 Number 丢精度、或被 JSON 加上引号
+      body.set(this.idsKey, `[${ids.join(',')}]`);
+      body.set('path', destination || '/');
+      return this.request(this.transferPath, {
+        method: 'POST',
+        query: this.transferQuery,
+        body: body.toString(),
+      });
+    }
+
+    async fetchShareListPage(sharePath, page, shareDirRaw, fid) {
+      if (!fid) throw new PanRelayError('群文件缺少目录 id，无法列出子文件');
+      const query = new URLSearchParams({
+        ...this.listParams,
+        fs_id: String(fid),
+        page: String(page),
+        num: String(this.listPageSize),
+        limit: String(this.listPageSize),
+        desc: '1',
+      }).toString();
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          const data = await this.request(this.listPath, { query, checkErrno: true });
+          const records = Array.isArray(data.records) ? data.records : data.records?.list || [];
+          const items = records.map((r) => ({
+            id: r.fs_id,
+            name: r.server_filename,
+            isDirectory: Number(r.isdir) === 1,
+            sharePath: joinPath(sharePath, r.server_filename),
+            shareDirRaw: '',
+          }));
+          if (page === 1 && items.length && items.every((item) => String(item.id) === String(fid))) {
+            throw new PanRelayError(`列举「${sharePath}」只返回了文件夹本身，已停止，避免反复转存同一目录`);
+          }
+          const hasMore =
+            data.has_more == null ? null : data.has_more === true || Number(data.has_more) === 1;
+          return { items, pageSize: this.listPageSize, hasMore };
+        } catch (error) {
+          if (error.cancelled) throw error;
+          if (!isRetriableShareError(error) || attempt >= this.listMaxRetries - 1) {
+            throw new PanRelayError(
+              `列举群文件目录失败：${this.formatShareListError(error)}（${sharePath}）`,
+              { errno: error.errno, response: error.response },
+            );
+          }
+          const delay = Math.min(30000, 3000 * (attempt + 1));
+          this.progress(`列举群文件目录超时或繁忙，${Math.ceil(delay / 1000)} 秒后重试…`);
+          await this.wait(delay);
+        }
+      }
+    }
+  }
+
   function readBalancedJson(text, start) {
     let depth = 0;
     let inString = false;
@@ -779,6 +876,7 @@
   root.PanRelay = {
     PanRelayError,
     ShareTransferEngine,
+    GroupTransferEngine,
     parseShareHtml,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : window);

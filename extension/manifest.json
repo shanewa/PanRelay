@@ -34,9 +34,33 @@
         "https://pan.baidu.com/share/init*",
         "https://yun.baidu.com/s/*"
       ],
-      "js": ["lib/transfer-core.js", "lib/unlock.js", "content/unlock-guide.js", "content/share-relay.js"],
+      "js": [
+        "lib/transfer-core.js",
+        "lib/unlock.js",
+        "content/unlock-guide.js",
+        "content/relay-panel.js",
+        "content/share-relay.js"
+      ],
       "css": ["styles/relay-panel.css", "styles/unlock-guide.css"],
       "run_at": "document_start"
+    },
+    {
+      "matches": ["https://pan.baidu.com/disk/main*", "https://yun.baidu.com/disk/main*"],
+      "js": ["injected/group-bridge.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://pan.baidu.com/disk/main*", "https://yun.baidu.com/disk/main*"],
+      "js": [
+        "lib/transfer-core.js",
+        "lib/unlock.js",
+        "content/unlock-guide.js",
+        "content/relay-panel.js",
+        "content/group-relay.js"
+      ],
+      "css": ["styles/relay-panel.css", "styles/unlock-guide.css"],
+      "run_at": "document_idle"
     },
     {
       "matches": ["https://pan.baidu.com/*", "https://yun.baidu.com/*"],

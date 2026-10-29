@@ -242,6 +242,22 @@ errno **`12`**：单次数量超限，向上抛给拆分逻辑。
 
 `normalizeSelection` 把桥返回的选中项分成 directories / files，然后先目录后文件。
 
+### 4.5 群文件库：`group-bridge.js` → `group-relay.js` → `GroupTransferEngine`
+
+群聊在 `/disk/main#/im/session`，「文件库」是 Vue 组件（`.im-doclib`，行 `tr.im-pan-table__body-row`，行内按钮 `aria-label="转存"`）。转存要先在百度的目录选择框里选路径，所以**不拦点击**，而是在主世界钩住页面自己的请求：
+
+1. `injected/group-bridge.js`（manifest `world: MAIN`，`document_start`）包装 `XMLHttpRequest` / `fetch`：
+   - `/mbox/.../shareinfo`、`/mbox/.../listshare` 的响应按 `fs_id` 缓存文件名、`isdir`；缓存没有时再翻 `.im-doclib` 的 `__vue__.innerList`。
+   - `/mbox/.../transfer` 的响应若是超限（errno 12、带 `target_file_nums`，或文案含「超出 / 上限 / 会员」），把请求 URL、表单参数、存文件 id 的字段名（值为数字 JSON 数组的那个，一般是 `fs_ids`）和选中项信息用 `panrelay-group-limit` 事件（`detail` 为 JSON 字符串）交给内容脚本。
+   - 转存若是异步（返回 `task_id`），等页面轮询 `/share/taskquery` 得到 `failed` 且超限时再交出。
+2. `content/group-relay.js`：已解锁才接手；把多次超限排队顺序执行；8 秒内收掉文案含「超出 / 上限 / 会员」的弹窗与 `.v-modal` 遮罩。
+3. `GroupTransferEngine extends ShareTransferEngine`：
+   - `sendTransfer` 用原请求的路径、query 和表单，只替换文件 id 字段与 `path`（id 原样拼成 `[1,2]`，不经 Number）。
+   - `fetchShareListPage` 调 `/mbox/msg/shareinfo?from_uk&msg_id&gid&type=2&fs_id=<目录>&page&num=100&limit=100&desc=1`，取 `records`；`has_more` 决定是否翻页（一页不满也可能还有）。
+   - 拆分、去重、进度等逻辑全部复用父类。
+
+右下角面板抽到 `content/relay-panel.js`（`PanRelayPanel`），分享页与群文件库共用。
+
 ---
 
 ## 5. 视频倍速

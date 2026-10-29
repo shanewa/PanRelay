@@ -208,6 +208,145 @@ const sel = (n) => ({ fs_id: n.id, isdir: n.isdir, server_filename: n.name, path
     check('批量失败退回逐个：无重复、无遗漏', !error && dup === 0 && missing === 0, `error=${error && error.message} dup=${dup} missing=${missing}`);
   }
 
+  // 群文件库：/mbox/msg/transfer + /mbox/msg/shareinfo（按目录 fs_id 翻页，has_more 决定是否还有下一页）
+  {
+    const { GroupTransferEngine } = globalThis.PanRelay;
+    const t = buildTree();
+    const big = t.add(t.root, '课程', 1);
+    const subs = [];
+    for (let i = 0; i < 30; i++) {
+      const s = t.add(big, `第${i}讲`, 1);
+      subs.push(s);
+      for (let j = 0; j < 40; j++) t.add(s, `v${j}.mp4`, 0);
+    }
+    const transferred = new Map();
+    const bodies = [];
+    const respond = (obj) => ({ ok: true, status: 200, text: async () => JSON.stringify(obj) });
+    const fetch = async (url, opts) => {
+      const u = new URL(url);
+      if (u.pathname === '/api/list' || u.pathname === '/api/create') return respond({ errno: 0, list: [] });
+      if (u.pathname === '/mbox/msg/shareinfo') {
+        const node = t.byId.get(Number(u.searchParams.get('fs_id')));
+        if (!node || u.searchParams.get('msg_id') !== 'm1' || u.searchParams.get('gid') !== 'g1') {
+          return respond({ errno: 2131 });
+        }
+        // 每页只给 7 条，但 has_more 表示还有：引擎不能因为一页不满就停
+        const page = Number(u.searchParams.get('page'));
+        const slice = node.children.slice((page - 1) * 7, page * 7);
+        return respond({
+          errno: 0,
+          has_more: page * 7 < node.children.length ? 1 : 0,
+          records: slice.map((c) => ({ fs_id: c.id, isdir: c.isdir, server_filename: c.name, path: c.path })),
+        });
+      }
+      if (u.pathname === '/mbox/msg/transfer') {
+        const body = new URLSearchParams(opts.body);
+        bodies.push(body);
+        const ids = JSON.parse(body.get('fs_ids'));
+        const total = ids.reduce((s, id) => s + countFiles(t.byId.get(id)), 0);
+        if (total > 500) return respond({ errno: 12, target_file_nums: total, target_file_nums_limit: 500 });
+        for (const id of ids) transferred.set(id, (transferred.get(id) || 0) + 1);
+        return respond({ errno: 0 });
+      }
+      throw new Error(`unexpected ${url}`);
+    };
+    const e = new GroupTransferEngine({
+      fetch,
+      fromUk: 'u1',
+      msgId: 'm1',
+      bdstoken: 'tok',
+      transferPath: '/mbox/msg/transfer',
+      transferQuery: 'bdstoken=tok&channel=chunlei',
+      transferBody: { from_uk: 'u1', msg_id: 'm1', gid: 'g1', type: '2', ondup: 'newcopy' },
+      idsKey: 'fs_ids',
+      listParams: { from_uk: 'u1', msg_id: 'm1', gid: 'g1', type: '2' },
+      batchSize: 500,
+      transferCooldownMs: 0,
+      onProgress: () => {},
+    });
+    let error = null;
+    try {
+      await e.runSelection([{ fs_id: big.id, isdir: 1, server_filename: '课程', path: '/课程' }], '/我的/学习');
+    } catch (err) {
+      error = err;
+    }
+    const once = subs.every((s) => transferred.get(s.id) === 1);
+    const keptParams = bodies.every((b) => b.get('gid') === 'g1' && b.get('msg_id') === 'm1' && b.get('type') === '2');
+    const dest = bodies.filter((b) => b.get('path').startsWith('/我的/学习/课程')).length;
+    check(
+      '群文件：沿用原请求参数、按 has_more 翻页、子目录各转一次',
+      !error && once && keptParams && dest > 0,
+      `error=${error && error.message} subsOnce=${once} params=${keptParams} requests=${bodies.length}`,
+    );
+  }
+
+  // 群文件钩子：百度回超限时把原请求交给内容脚本
+  {
+    const events = [];
+    const listeners = {};
+    class FakeXHR {
+      constructor() {
+        this.listeners = {};
+      }
+      addEventListener(type, fn) {
+        (this.listeners[type] ||= []).push(fn);
+      }
+      respond(text) {
+        this.responseText = text;
+        (this.listeners.load || []).forEach((fn) => fn());
+      }
+    }
+    FakeXHR.prototype.open = function () {};
+    FakeXHR.prototype.send = function () {};
+    const saved = {};
+    for (const k of ['window', 'document', 'location', 'XMLHttpRequest', 'CustomEvent', 'fetch']) saved[k] = globalThis[k];
+    globalThis.window = globalThis;
+    globalThis.location = { href: 'https://pan.baidu.com/disk/main#/im/session' };
+    globalThis.XMLHttpRequest = FakeXHR;
+    globalThis.CustomEvent = class {
+      constructor(type, init) {
+        this.type = type;
+        this.detail = init.detail;
+      }
+    };
+    globalThis.document = {
+      querySelectorAll: () => [],
+      dispatchEvent: (ev) => events.push(ev),
+      addEventListener: (type, fn) => ((listeners[type] ||= []).push(fn)),
+    };
+    delete globalThis.fetch;
+    delete require.cache[require.resolve('../extension/injected/group-bridge.js')];
+    require('../extension/injected/group-bridge.js');
+
+    const list = new FakeXHR();
+    list.open('GET', '/mbox/group/listshare?gid=g1&type=2');
+    list.send();
+    list.respond(JSON.stringify({
+      errno: 0,
+      records: { msg_list: [{ msg_id: 'm1', file_list: [{ fs_id: 815453071125924, isdir: 1, server_filename: '26年课程', path: '/x/26年课程' }] }] },
+    }));
+    const tr = new FakeXHR();
+    tr.open('POST', '/mbox/msg/transfer?bdstoken=tok&channel=chunlei');
+    tr.send('from_uk=u1&msg_id=m1&gid=g1&type=2&path=%2F%E5%AD%A6%E4%B9%A0&fs_ids=%5B815453071125924%5D');
+    tr.respond(JSON.stringify({ errno: 12, show_msg: '转存文件数超过上限' }));
+
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete globalThis[k];
+      else globalThis[k] = v;
+    }
+    const detail = events[0] && JSON.parse(events[0].detail);
+    check(
+      '群文件钩子：超限时交出原请求与文件信息',
+      events.length === 1 &&
+        detail.idsKey === 'fs_ids' &&
+        detail.ids[0] === '815453071125924' &&
+        detail.body.path === '/学习' &&
+        detail.items[0].server_filename === '26年课程' &&
+        detail.items[0].isdir === 1,
+      detail ? `idsKey=${detail.idsKey} path=${detail.body.path} item=${detail.items[0]?.server_filename}` : 'no event',
+    );
+  }
+
   console.log(failures ? `\n${failures} FAILED` : '\nALL PASS');
   process.exit(failures ? 1 : 0);
 })();
