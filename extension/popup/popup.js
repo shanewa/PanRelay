@@ -212,6 +212,25 @@ contactCloseEl.addEventListener('click', () => setContactOpen(false));
 contactOverlayEl.addEventListener('click', (event) => {
   if (event.target === contactOverlayEl) setContactOpen(false);
 });
+
+const helpLinkEl = document.getElementById('helpLink');
+const helpOverlayEl = document.getElementById('helpOverlay');
+const helpCloseEl = document.getElementById('helpClose');
+
+function setHelpOpen(open) {
+  helpOverlayEl.hidden = !open;
+  document.body.classList.toggle('help-open', open);
+  (open ? helpCloseEl : helpLinkEl).focus();
+}
+
+helpLinkEl.addEventListener('click', () => setHelpOpen(true));
+helpCloseEl.addEventListener('click', () => setHelpOpen(false));
+helpOverlayEl.addEventListener('click', (event) => {
+  if (event.target === helpOverlayEl) setHelpOpen(false);
+});
+
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && !contactOverlayEl.hidden) setContactOpen(false);
+  if (event.key !== 'Escape') return;
+  if (!contactOverlayEl.hidden) setContactOpen(false);
+  if (!helpOverlayEl.hidden) setHelpOpen(false);
 });

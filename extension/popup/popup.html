@@ -11,6 +11,9 @@
       <img class="brand-logo" src="../icons/icon48.png" alt="" width="28" height="28" />
       <h1>度盘接力存</h1>
       <span class="brand-tag">完全免费</span>
+      <button type="button" class="help-btn" id="helpLink" aria-haspopup="dialog">
+        <span class="help-glyph" aria-hidden="true">?</span>使用帮助
+      </button>
     </header>
 
     <section id="unlockGate" class="card unlock-gate" hidden>
@@ -115,6 +118,40 @@
         <h2 id="contactTitle">联系作者</h2>
         <img class="oa-qr" src="../assets/wechat-oa-qr.jpg" alt="公众号二维码" />
         <p class="hint">微信扫一扫关注公众号，直接给作者发消息</p>
+      </div>
+    </div>
+
+    <div class="overlay" id="helpOverlay" hidden>
+      <div class="overlay-card help-card" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+        <button type="button" class="overlay-close" id="helpClose" aria-label="关闭">×</button>
+        <h2 id="helpTitle">怎么用</h2>
+        <p class="hint help-lead">照常在百度网盘里点保存；文件太多被百度拦下时，PanRelay 接着分批转存。</p>
+        <div class="help-routes">
+          <section class="help-route">
+            <h3>分享链接页</h3>
+            <ol class="relay-track">
+              <li>打开百度网盘分享链接</li>
+              <li>勾选要保存的文件或文件夹</li>
+              <li>点「保存到网盘」，选好目录</li>
+              <li class="handoff">超过 500 个文件时，<b>PanRelay 接手</b>分批转存</li>
+            </ol>
+          </section>
+          <section class="help-route">
+            <h3>群聊文件库</h3>
+            <ol class="relay-track">
+              <li>网盘网页进入「群聊」，打开群</li>
+              <li>点「文件库」，勾选文件</li>
+              <li>点「转存」，选好目录</li>
+              <li class="handoff">百度提示超出上限时，<b>PanRelay 接手</b>分批转存</li>
+            </ol>
+          </section>
+        </div>
+        <ul class="help-tips">
+          <li>转存进度在网页右下角的面板里，可以收起，也可以中途取消；已转存的文件会保留。</li>
+          <li>频繁提示限流时，把「转存间隔」调大一些。</li>
+          <li>个别子文件夹失败时，单独勾选它再保存一次即可。</li>
+          <li>视频倍速和「下载MD」按钮只在网盘播放页出现。</li>
+        </ul>
       </div>
     </div>
     <script src="../lib/unlock.js"></script>
