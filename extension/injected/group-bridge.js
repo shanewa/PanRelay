@@ -163,7 +163,10 @@
     }
   }
 
-  const watched = (url) => TRANSFER_RE.test(url) || LIST_RE.test(url) || TASK_RE.test(url);
+  // 脚本挂在整个 /disk/main 上，但只接管群聊（#/im/...）里的转存；SPA 切路由不刷新页面，须每次请求时判断
+  const onImRoute = () => /#\/im(\/|$|\?)/.test(String(location.href));
+  const watched = (url) =>
+    onImRoute() && (TRANSFER_RE.test(url) || LIST_RE.test(url) || TASK_RE.test(url));
 
   const origOpen = XMLHttpRequest.prototype.open;
   const origSend = XMLHttpRequest.prototype.send;

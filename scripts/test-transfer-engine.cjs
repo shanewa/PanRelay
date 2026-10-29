@@ -341,6 +341,15 @@ const sel = (n) => ({ fs_id: n.id, isdir: n.isdir, server_filename: n.name, path
     });
     tr.response = { errno: 130, show_msg: '转存文件数超过上限' };
     (tr.listeners.load || []).forEach((fn) => fn());
+    const eventsOnIm = events.length;
+
+    // 同一页面 SPA 切到「我的文件」后，不应再接管
+    globalThis.location.href = 'https://pan.baidu.com/disk/main#/index?category=all';
+    const other = new FakeXHR();
+    other.open('POST', '/mbox/msg/transfer?bdstoken=tok');
+    other.send('from_uk=u1&msg_id=m1&gid=g1&type=2&path=%2F&fs_ids=%5B815453071125924%5D');
+    other.respond(JSON.stringify({ errno: 130, show_msg: '转存文件数超过上限' }));
+    check('群文件钩子：非 #/im 路由不接管', events.length === eventsOnIm, `events=${events.length}`);
 
     for (const [k, v] of Object.entries(saved)) {
       if (v === undefined) delete globalThis[k];
@@ -349,7 +358,7 @@ const sel = (n) => ({ fs_id: n.id, isdir: n.isdir, server_filename: n.name, path
     const detail = events[0] && JSON.parse(events[0].detail);
     check(
       '群文件钩子：超限时交出原请求与文件信息',
-      events.length === 1 &&
+      eventsOnIm === 1 &&
         detail.idsKey === 'fs_ids' &&
         detail.ids[0] === '815453071125924' &&
         detail.body.path === '/学习' &&

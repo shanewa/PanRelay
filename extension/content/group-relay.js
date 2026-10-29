@@ -156,6 +156,7 @@
       return;
     }
     if (!detail?.ids?.length || !settings.enabled) return;
+    if (!/#\/im(\/|$|\?)/.test(location.href)) return;
     console.info(`[PanRelay] 接手群文件转存 ${JSON.stringify(detail)}`);
     if (!settings.unlocked) {
       PanRelayUnlockGuide.showGuide({ force: true });
